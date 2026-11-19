@@ -324,6 +324,55 @@ often identical and a refresh arrives as one jump in `players_tracked`.
   v13 (which also carried a stated caveat). Practice unchanged.
   **Best is now v16.**
 
+- **Fresh-seed validation, round 5 (synth23/24, before v17).**
+  `gen_synth2324.py` in the work dir, not committed: synth23 delayed
+  logistic, seed 121, 3 snapshots; synth24 Gompertz late-rise, seed 131,
+  3 snapshots — both gave 3 distinct snapshots on the first seed tried
+  (seed chosen on the snapshot-count criterion only, before any loss was
+  measured). v16 on them: synth23 0.4091 (miss 5.97 pp, cov 0.93),
+  synth24 0.3097 (miss 9.91 pp, cov 0.96) — the Gompertz case is the best
+  3-snapshot Gompertz score yet, the delayed case in the usual bad range.
+  Mean over the fresh pair 0.3594. The 3-snapshot verdict now rests on 13
+  cases; on all 24 cases v16 is mean 1–24 0.3256, 3-snapshot 13-case mean
+  0.3920.
+
+- **v17 (REJECTED): Winsorize the top at ≤ 3 snapshots.** Clip the
+  second-highest transformed median down to the middle value
+  (`meds5[3] := meds5[2]`) before the trimmed mean of the middle three,
+  so the median is `(meds5[1] + 2·meds5[2]) / 3` — the gentler cousin of
+  v16, meant to cap the blow-up family instead of dropping two families
+  outright, keeping v16's delayed-logistic wins while paying less on the
+  balanced synth12 and the Gompertz cases v16 loses (s16/18/22).
+  Measured on practice + synth1–24 with the real `main.ts` (variant file
+  `var-v17-winsor.ts` in the work dir). It LOSES on both gates: mean 1–20
+  0.3128 → 0.3183, 3-snapshot mean (9 cases) 0.3932 → 0.4054; on all 24
+  cases mean 1–24 0.3256 → 0.3321, 3-snapshot 13-case mean 0.3920 →
+  0.4040; practice unchanged at 0.1066. It wins only 3 of the 13
+  three-snapshot cases — synth12 0.2465 → 0.2299 (the hoped-for saving,
+  but only −0.0166), synth22 0.4570 → 0.4396, synth8 0.4041 → 0.4006 —
+  and loses the other 10, worst on synth20 0.3381 → 0.3902 and synth24
+  0.3097 → 0.3541 (the two best Gompertz cases under v16), and on the
+  fresh pair as a whole (0.3594 → 0.3849, losing both seeds). Mechanism:
+  unlike v16, Winsorize drops the LOWEST family from the average and
+  double-weights the middle value, so the median sits HIGHER than v16's
+  and the median miss worsens on most overshoot cases (synth20 10.78 →
+  14.03 pp, synth24 9.91 → 12.83 pp) — it feeds the overshoot bias
+  instead of fighting it. v16's edge comes from keeping the lowest family
+  as a downward anchor, not just from capping the top.
+  A second, gentler variant was measured in the same round (v17b,
+  `var-v17b-winsor-mid.ts`): clip the second-highest down to the mean of
+  the two middle values (`meds5[3] := (meds5[1]+meds5[2])/2`), i.e. the
+  midpoint between v13's trimmed mean and v17. It also LOSES on both
+  gates (mean 1–20 0.3175, 3-snapshot 9-case 0.4036; mean 1–24 0.3311,
+  3-snapshot 13-case 0.4022; fresh pair 0.3788), winning only synth12
+  (0.2354) and synth22 (0.4483) of the 13 — the gentler point loses
+  almost as much as the hard one, so no point on this axis works. Note:
+  winsorizing BOTH top families down to the middle value and then taking
+  the middle-three mean is identical to v17 (the clipped max never enters
+  the middle three), so it is not a separate variant. No code change;
+  best stays v16. The Winsorize family is now closed alongside spread,
+  γ, SSE and logit-averaging.
+
 - **Fresh-seed validation, round 4 (synth21/22, after v16).**
   `gen_synth2122.py` in the work dir, not committed: synth21 delayed
   logistic, seed 101, 3 snapshots; synth22 Gompertz late-rise, seed 112,
@@ -382,6 +431,7 @@ published refresh aggregates: 04:30 read, 3,868 players, 4,276 earned,
 | v13 | 0.1066 | 0.008 pp | 0.98 |
 | v15 (rejected) | 0.1066 | 0.008 pp | 0.98 |
 | **v16 (this entry)** | **0.1066** | **0.008 pp** | **0.98** |
+| v17 (rejected) | 0.1066 | 0.008 pp | 0.98 |
 | v7 (rejected) | 0.1066 | 0.008 pp | 0.98 |
 
 Synthetic finals (2 days of reads, answer at day 7; each a different truth
@@ -410,6 +460,10 @@ chosen, to avoid overfitting one synthetic family):
 | synth18 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 72 | — | — | — | — | — | — | — | — | 0.4710 | 0.4397 | 0.4298 | 0.4228 | 0.4473 |
 | synth19 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 81 | — | — | — | — | — | — | — | — | — | — | — | 0.3935 | 0.3794 |
 | synth20 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 91 | — | — | — | — | — | — | — | — | — | — | — | 0.3944 | 0.3381 |
+| synth21 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 101 | — | — | — | — | — | — | — | — | — | — | — | — | 0.3978 | 0.3817 |
+| synth22 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 112 | — | — | — | — | — | — | — | — | — | — | — | — | 0.4320 | 0.4570 |
+| synth23 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 121 | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.4091 |
+| synth24 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 131 | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.3097 |
 | **mean 1–4** | | **0.5980** | **0.3834** | **0.3208** | **0.2705** | **0.2133** | **0.2133** | **0.2133** | **0.2133** | **0.2154** | **0.2154** | **0.2154** | **0.2154** | 0.2154 |
 | **mean 1–7** | | | | | **0.5341** | **0.2534** | **0.2534** | **0.2534** | **0.2534** | **0.2491** | **0.2491** | **0.2491** | **0.2491** | 0.2491 |
 | **mean 1–9** | | | | | **0.7920** | **0.2829** | **0.2706** | **0.2825** | **0.2694** | **0.2584** | **0.2592** | **0.2588** | **0.2585** | 0.2591 |
@@ -420,6 +474,10 @@ chosen, to avoid overfitting one synthetic family):
 | **mean 1–20** | | | | | | | | | | | | | **0.3156** | **0.3128** |
 | **mean 3-snap (8/10/12/15/16/17/18)** | | | | | | | | | | **0.4211** | **0.4102** | **0.4041** | **0.4008** | 0.4030 |
 | **mean 3-snap (8/10/12/15/16/17/18/19/20)** | | | | | | | | | | | | | **0.3993** | **0.3932** |
+| **mean 1–22** | | | | | | | | | | | | | 0.3246 | 0.3225 |
+| **mean 1–24** | | | | | | | | | | | | | | 0.3256 |
+| **mean 3-snap (11 cases, +21/22)** | | | | | | | | | | | | | 0.4021 | 0.3979 |
+| **mean 3-snap (13 cases, +21/22/23/24)** | | | | | | | | | | | | | | 0.3920 |
 
 Synth5–7 (generated for v5, after v4 was chosen, to stress the few-snapshot
 regime: 6–9 distinct snapshots instead of 9–30, refreshes 6–13 h apart,
@@ -493,24 +551,31 @@ do not re-sweep any of the three):
 1. *SSE-weighted trimmed mean at ≤ 3 snapshots* — TRIED as v14 and
    REJECTED (all three weight forms lose on both gates; see v14
    above). The SSE family is closed.
-2. *v15/v16 outcome — both median ideas now measured:* logit-space
-   trimmed mean (v15) REJECTED — it loses on both gates (mean 1–20
-   0.3177, 3-snap 0.4039) because the logit-mean sits above the
-   rate-mean near/above 50% and feeds the overshoot; asymmetric
-   top-only trim, lowest three (v16), PROMOTED — mean 1–20 0.3128,
-   3-snap 0.3932, with the caveat that fresh seeds 21/22 split 1–1.
-   Next median candidate for v17 (one variant at a time, same two
-   gates): Winsorize the top — clip the highest transformed median
-   down to the second-highest value BEFORE the trimmed mean of the
-   middle three, i.e. meds5[3] := meds5[2] then (meds5[1]+meds5[2]+
-   meds5[3])/3. It is the gentler cousin of v16: it caps the blow-up
-   family instead of dropping two families outright, so it may keep
-   v16's delayed-logistic wins while paying less on the balanced
-   synth12 and the Gompertz cases that v16 loses (s16/18/22). Deadline
-   21/11 18:30 — one variant at a time, no parallel tuning.
+2. *v17 outcome — Winsorize measured and REJECTED (both variants):*
+   hard winsorize (`meds5[3] := meds5[2]`, median `(m1+2·m2)/3`) loses
+   on both gates (mean 1–20 0.3183, 3-snap9 0.4054 vs v16's 0.3128/
+   0.3932) and on both fresh seeds 23/24 (0.3849 vs 0.3594); the gentler
+   midpoint variant (`meds5[3] := (m1+m2)/2`) loses almost as much
+   (0.3175 / 0.4036). Both drop the lowest family from the average, so
+   the median sits higher than v16's and feeds the overshoot bias —
+   v16's edge is the lowest family as a downward anchor, not just the
+   top cap. The Winsorize family is closed. Next median candidate for
+   v18 (one variant at a time, same two gates): *adaptive trim by pool
+   spread* — per trophy, use v16's lowest-3 when the five transformed
+   medians disagree widely (blow-up risk high) but fall back to the
+   middle-3 trimmed mean when the pool is tight (blow-up risk low, so
+   the lowest family is more likely a genuine low outlier than a
+   guard). It is the first rule that adapts per trophy instead of per
+   case, and it is the only shape that could keep v16's delayed-logistic
+   wins while recovering the balanced synth12 and the Gompertz cases
+   v16 loses — but it needs a diagnostic first: check whether pool
+   spread actually separates the cases/trophies where lowest-3 wins
+   from where it loses (s12/s16/s18/s22 vs s10/s15/s17/s19/s20), before
+   building the variant. Deadline 21/11 18:30 — one variant at a time,
+   no parallel tuning.
 3. *More fresh 3-snapshot seeds before any further scope change* —
-   the 3-snapshot verdict now rests on 11 cases (synth21/22 added for
-   v16, seeds 101/112). Two more seeds would firm up a v17 decision
+   the 3-snapshot verdict now rests on 13 cases (synth23/24 added for
+   v17, seeds 121/131). Two more seeds would firm up a v18 decision
    before the deadline (21/11 18:30). Note the diminishing returns:
    v9 → v16 moved mean 1–18 only 0.3147 → 0.3077, and each step since
    v11 has been ~0.001–0.003 — the current family is near its
