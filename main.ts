@@ -1,5 +1,25 @@
-// gta6-trophy-rarity-forecast-01 — v11.
+// gta6-trophy-rarity-forecast-01 — v12.
 //
+// v12 changes over v11 (see README for measurements):
+//  - TREND branch, few snapshots only: at <= 3 snapshots the growth
+//    dampening is stronger, gamma 0.7 instead of 0.8 (applied to the
+//    picked median AND to each family's transformed median in the
+//    trimmed-mean pool, so the whole pool shifts together). The
+//    signed-error check found an overshoot bias on late-rise 3-snapshot
+//    cases (synth8 mean +0.35, synth16 +0.51 logit), and the trimmed
+//    mean did not fix it; pulling the extrapolated medians a little
+//    further toward the last rate is the direct median-level fix.
+//    Wins on every aggregate vs v11: mean 1-9 0.2592 -> 0.2588, mean
+//    1-12 0.2682 -> 0.2675, mean 1-14 0.2720 -> 0.2714, mean 1-16
+//    0.2959 -> 0.2943; 3-snapshot mean 0.4032 -> 0.3982 (wins synth8/
+//    10/15/16, loses only synth12 by 0.0038). Gamma 0.6 was also
+//    measured (v12b: mean 1-16 0.2945, mean 1-9 0.2603) and loses to
+//    0.7 on every aggregate, so 0.7 — not 0.6 — is the kept value.
+//    Rejected in the same round: asymmetric downward spread x1.5 at
+//    <= 3 (v12a: mean 1-16 0.2962 — gains on the four overshoot cases
+//    are wiped out by synth12, 0.2015 -> 0.2381). Practice unchanged.
+//
+// v11 changes over v9 (see README for measurements):
 // v11 changes over v9 (see README for measurements):
 //  - TREND branch, few snapshots only: at <= 3 snapshots the median is the
 //    TRIMMED MEAN of the five families' transformed target medians — drop
@@ -397,7 +417,9 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     const floorRate = ((lastRate / 100) * lastN) / nStar * 100;
     // v4: shrink the fitted growth over the last rate toward no growth.
     const lr = Math.max(lastRate, 0.01);
-    if (med > lr) med = lr * Math.pow(med / lr, GROWTH_DAMPEN);
+    // v12: stronger dampening (gamma 0.7) at <= 3 snapshots only — the
+    // overshoot bias lives there; 4+ snapshots keep gamma 0.8.
+    if (med > lr) med = lr * Math.pow(med / lr, snaps.length <= 3 ? 0.7 : GROWTH_DAMPEN);
     // v5: close at most 60% of the remaining headroom to 100%.
     med = Math.min(med, lr + HEADROOM_CLOSE * (100 - lr));
     med = Math.min(99.99, Math.max(0.01, Math.max(med, floorRate)));
@@ -424,7 +446,7 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     // the middle value).
     const xform4 = (mm: number): number => {
       let v = mm;
-      if (v > lr) v = lr * Math.pow(v / lr, GROWTH_DAMPEN);
+      if (v > lr) v = lr * Math.pow(v / lr, snaps.length <= 3 ? 0.7 : GROWTH_DAMPEN);
       v = Math.min(v, lr + HEADROOM_CLOSE * (100 - lr));
       return Math.min(99.99, Math.max(0.01, Math.max(v, floorRate)));
     };
