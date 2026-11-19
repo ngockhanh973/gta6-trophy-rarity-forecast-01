@@ -1,4 +1,19 @@
-// gta6-trophy-rarity-forecast-01 — v5.
+// gta6-trophy-rarity-forecast-01 — v6.
+//
+// Forecast each GTA VI trophy's Exophase earn rate at the case target as five
+// quantiles (5/25/50/75/95%), scored by pinball loss on the logit scale.
+//
+// v6 changes over v5 (see README for measurements):
+//  - TREND branch, few snapshots only: when there are at most 4 distinct
+//    snapshots, the median is the median (mean of the middle two) of the
+//    four families' target medians — each first passed through the same
+//    dampening + headroom-cap + floor transforms as the picked median —
+//    instead of the argmin-SSE family's median. With 3-4 points the SSE
+//    gaps between families are rounding noise, so picking one family bets
+//    the trophy on a coin flip; the median across families is robust to
+//    one family blowing up. Scoped to <= 4 snapshots (the boundary used by
+//    the v6a/v6b probes): synth1-7, with 6+ snapshots, are untouched, and
+//    the blanket median-of-4 that v5 rejected stays rejected.
 //
 // Forecast each GTA VI trophy's Exophase earn rate at the case target as five
 // quantiles (5/25/50/75/95%), scored by pinball loss on the logit scale.
@@ -331,7 +346,20 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     const earnCount = Math.max(1, (lastRate / 100) * lastN);
     const s = Math.min(1.5, Math.max(0.55,
       Math.sqrt((RW_SIGMA * Math.sqrt(horizonDays)) ** 2 + Math.max(resid, 0.15) ** 2 + 0.15 ** 2 + BINOM_SPREAD_NUM / earnCount)));
-    return { id: t.id, q: quantiles(logit(med), s), med, s, lastRate, floorRate, tier: t.tier, asym: pick[3] };
+    // v6: median of the four families' (transformed) target medians, used
+    // as the median instead of the picked family's when snapshots <= 4
+    // (applied in the tier-shrinkage step below). Each family's median is
+    // transformed exactly like the picked median, so the four values are
+    // comparable; the median of four is the mean of the middle two.
+    const xform4 = (mm: number): number => {
+      let v = mm;
+      if (v > lr) v = lr * Math.pow(v / lr, GROWTH_DAMPEN);
+      v = Math.min(v, lr + HEADROOM_CLOSE * (100 - lr));
+      return Math.min(99.99, Math.max(0.01, Math.max(v, floorRate)));
+    };
+    const meds4 = cands.map((cd) => xform4(cd[0])).sort((a, b) => a - b);
+    const med4 = (meds4[1] + meds4[2]) / 2;
+    return { id: t.id, q: quantiles(logit(med), s), med, s, lastRate, floorRate, tier: t.tier, asym: pick[3], med4 };
   });
   // v5: tier-asymptote shrinkage. A single trophy's fitted asymptote is
   // barely identified from a handful of snapshots, so pull it 25% toward
@@ -351,7 +379,7 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
   return rows.map((r) => {
     const tm = tierMed.get(r.tier) ?? r.asym;
     const aPrime = TIER_SHRINK_OWN * r.asym + (1 - TIER_SHRINK_OWN) * tm;
-    let m = r.med;
+    let m = snaps.length <= 4 ? r.med4 : r.med;
     if (m > r.lastRate && r.asym > 0) m = r.lastRate + (m - r.lastRate) * (aPrime / r.asym);
     const lr2 = Math.max(r.lastRate, 0.01);
     m = Math.min(m, lr2 + HEADROOM_CLOSE * (100 - lr2));
