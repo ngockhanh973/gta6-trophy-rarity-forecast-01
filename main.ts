@@ -64,6 +64,11 @@ const TIER_WEIGHT: Record<string, number> = {
   platinum: 0.3, gold: 0.6, silver: 0.8, bronze: 1.0,
 };
 const SECRET_BRONZE_WEIGHT = 1.2;
+/** Growth-dampening exponent (v4): the fitted median's growth over the last
+    rate is shrunk toward no growth; extrapolating 2 days of reads 4.5 days
+    out systematically overshoots on late-rising truth. Flat across
+    gamma 0.7-0.85 on four synthetic families, so 0.8 is not a tuned point. */
+const GROWTH_DAMPEN = 0.8;
 /** Spread (logit) of the flat-branch forecast: refresh size is documented,
     so the remaining uncertainty is per-trophy small-number noise plus the
     tier prior. */
@@ -295,6 +300,9 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     // Counts never fall: floor the median at lastCount / forecastN.
     const lastRate = last.rates[i] ?? 0;
     const floorRate = ((lastRate / 100) * lastN) / nStar * 100;
+    // v4: shrink the fitted growth over the last rate toward no growth.
+    const lr = Math.max(lastRate, 0.01);
+    if (med > lr) med = lr * Math.pow(med / lr, GROWTH_DAMPEN);
     med = Math.min(99.99, Math.max(0.01, Math.max(med, floorRate)));
     if (lastRate >= 100) med = 99.99;
     // Spread: random walk + residual std in logit space around the picked

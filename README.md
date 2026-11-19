@@ -1,4 +1,4 @@
-# GTA VI trophy rarity forecast 01 — v3
+# GTA VI trophy rarity forecast 01 — v4
 
 Forecasts each GTA VI trophy's Exophase earn rate at the case target as five
 quantiles (5/25/50/75/95%), scored by pinball loss on the logit scale.
@@ -43,6 +43,14 @@ often identical and a refresh arrives as one jump in `players_tracked`.
   picked family's residual and an uncertainty floor. Selection by
   logit-space SSE was tried and rejected: it is dominated by the near-zero
   early rates and picks the wrong family on Gompertz truth.
+- **v4: growth dampening.** The fitted median's growth over the last rate
+  is shrunk, `med = lastRate · (med/lastRate)^0.8` when the median exceeds
+  the last rate: extrapolating 2 days of reads 4.5 days out systematically
+  overshoots on the late-rising (Gompertz) synthetic, and the shrink costs
+  almost nothing elsewhere (γ is flat, 0.7–0.85, across the four
+  synthetics, so 0.8 is not a tuned point). Recency-weighted SSE for
+  family selection was tried and rejected: with few distinct snapshots it
+  destroys selection (synth3 loss 0.72 → 2.27).
 
 ## Local measurements (practice answers reconstructed from the kit's
 published refresh aggregates: 04:30 read, 3,868 players, 4,276 earned,
@@ -53,25 +61,24 @@ published refresh aggregates: 04:30 read, 3,868 players, 4,276 earned,
 | house baseline (starter) | 1.4008 | 0.677 pp | 0.00 |
 | v1 | 0.2459 | 0.042 pp | 0.98 |
 | v2 | 0.1066 | 0.008 pp | 0.98 |
-| **v3 (this entry)** | **0.1066** | **0.008 pp** | **0.98** |
+| v3 | 0.1066 | 0.008 pp | 0.98 |
+| **v4 (this entry)** | **0.1066** | **0.008 pp** | **0.98** |
 
 Synthetic finals (2 days of reads, answer at day 7; each a different truth
 family and refresh/N regime — synth3/4 were generated for v2, after v1 was
 chosen, to avoid overfitting one synthetic family):
 
-| synthetic | truth family | v1 loss | v2 loss | v3 loss |
-|---|---|---|---|---|
-| synth1 | saturating exponential | 0.2465 | 0.2548 | 0.1833 |
-| synth2 | logistic in log-time | 0.2872 | 0.2805 | 0.2107 |
-| synth3 | Gompertz, refresh 5–9 h, N saturating | 1.5776 | 0.7427 | 0.7111 |
-| synth4 | power saturation, refresh 1–2 h, N exponential | 0.2807 | 0.2556 | 0.1779 |
-| **mean** | | **0.5980** | **0.3834** | **0.3208** |
+| synthetic | truth family | v1 loss | v2 loss | v3 loss | v4 loss |
+|---|---|---|---|---|---|
+| synth1 | saturating exponential | 0.2465 | 0.2548 | 0.1833 | 0.1698 |
+| synth2 | logistic in log-time | 0.2872 | 0.2805 | 0.2107 | 0.2144 |
+| synth3 | Gompertz, refresh 5–9 h, N saturating | 1.5776 | 0.7427 | 0.7111 | 0.5155 |
+| synth4 | power saturation, refresh 1–2 h, N exponential | 0.2807 | 0.2556 | 0.1779 | 0.1824 |
+| **mean** | | **0.5980** | **0.3834** | **0.3208** | **0.2705** |
 
-v3 changes only the trend branch's random-walk spread (0.5 → 0.3 logit/√day),
-so the practice loss is unchanged from v2; the synthetic mean improves
-because v2's spread was ~2× wider than the forecasts' actual logit error.
-v2 is slightly worse than v1 only on synth1 (v1's home family: per-trophy
-family selection occasionally picks a different family on rounding noise);
-it is better everywhere else, and far better when the truth is not v1's
-family — which is the risk that matters for the real final, whose family
-is unknown.
+v3–v4 change only the trend branch, so the practice loss is unchanged
+from v2; the synthetic mean improves at each step. v2 is slightly worse
+than v1 only on synth1 (v1's home family: per-trophy family selection
+occasionally picks a different family on rounding noise); it is better
+everywhere else, and far better when the truth is not v1's family — which
+is the risk that matters for the real final, whose family is unknown.
