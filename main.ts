@@ -1,4 +1,19 @@
-// gta6-trophy-rarity-forecast-01 — v6.
+// gta6-trophy-rarity-forecast-01 — v7.
+//
+// v7 changes over v6 (see README for measurements):
+//  - TREND branch, few snapshots only: the median-of-4 is used only when
+//    the pick is not confident — the top-two families' in-sample SSEs are
+//    within 20% (sse1/sse2 >= 0.8) — else the argmin pick is kept. Idea:
+//    keep synth9's good pick while still rescuing synth8. MEASURED: LOSES
+//    (mean 1-12 0.2877 vs v6 0.2774; collapses to ~v5 on every threshold
+//    0.1-0.9). With 3-4 points the best family fits 3-9x better in-sample
+//    than the runner-up (median sse ratio 0.11-0.38), so the gate almost
+//    never fires — and the ratio does not separate the cases where the pick
+//    is right (synth10: 0.112) from where it is wrong (synth8: 0.118).
+//    In-sample SSE cannot tell a confident pick from a coin flip here.
+//    Best stays v6; v7 is kept in history as a rejected attempt.
+//
+// v6.
 //
 // Forecast each GTA VI trophy's Exophase earn rate at the case target as five
 // quantiles (5/25/50/75/95%), scored by pinball loss on the logit scale.
@@ -91,6 +106,10 @@ const HEADROOM_CLOSE = 0.6;
 /** Tier-asymptote shrinkage (v5): weight on a trophy's own fitted asymptote
     when pulling it toward its tier's median fitted asymptote. */
 const TIER_SHRINK_OWN = 0.75;
+/** Selection-confidence threshold (v7): use the median-of-4 only when the
+    top-two families' SSEs are within 1-CONF_RATIO of each other (see header:
+    measured, loses — the gate almost never fires). */
+const CONF_RATIO = 0.8;
 /** Binomial-count spread (v5): numerator of the 1/earnCount variance term
     added to the spread in quadrature; rare trophies are noisier in logit
     space. */
@@ -359,7 +378,9 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     };
     const meds4 = cands.map((cd) => xform4(cd[0])).sort((a, b) => a - b);
     const med4 = (meds4[1] + meds4[2]) / 2;
-    return { id: t.id, q: quantiles(logit(med), s), med, s, lastRate, floorRate, tier: t.tier, asym: pick[3], med4 };
+    const srt = cands.map((cd) => cd[1]).sort((a, b) => a - b);
+    const sseRatio = srt[1] > 0 ? srt[0] / srt[1] : 1;
+    return { id: t.id, q: quantiles(logit(med), s), med, s, lastRate, floorRate, tier: t.tier, asym: pick[3], med4, sseRatio };
   });
   // v5: tier-asymptote shrinkage. A single trophy's fitted asymptote is
   // barely identified from a handful of snapshots, so pull it 25% toward
@@ -379,7 +400,7 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
   return rows.map((r) => {
     const tm = tierMed.get(r.tier) ?? r.asym;
     const aPrime = TIER_SHRINK_OWN * r.asym + (1 - TIER_SHRINK_OWN) * tm;
-    let m = snaps.length <= 4 ? r.med4 : r.med;
+    let m = snaps.length <= 4 && r.sseRatio >= CONF_RATIO ? r.med4 : r.med;
     if (m > r.lastRate && r.asym > 0) m = r.lastRate + (m - r.lastRate) * (aPrime / r.asym);
     const lr2 = Math.max(r.lastRate, 0.01);
     m = Math.min(m, lr2 + HEADROOM_CLOSE * (100 - lr2));

@@ -82,6 +82,19 @@ often identical and a refresh arrives as one jump in `players_tracked`.
   The blanket median-of-4 that v5 rejected (much worse on synth5/6)
   stays rejected — the scope is what makes it work.
 
+- **v7 (REJECTED): selection-confidence rule.** In the ≤ 4-snapshot regime
+  the median-of-4 is used only when the top-two families' in-sample SSEs
+  are within 20% (sse1/sse2 ≥ 0.8), else the argmin pick is kept — the idea
+  was to keep synth9's good pick while still rescuing synth8. It loses on
+  every threshold swept (0.1/0.2/0.5/0.7/0.8/0.9; mean 1–9 0.2776–0.2825
+  vs v6's 0.2706, mean 1–12 0.2844–0.2877 vs 0.2774): with 3–4 points the
+  best family fits 3–9× better in-sample than the runner-up (median SSE
+  ratio 0.11–0.38), so the gate almost never fires and the rule collapses
+  to ~v5 — and the ratio does not separate the cases where the pick is
+  right (synth10: 0.112) from where it is wrong (synth8: 0.118).
+  In-sample SSE cannot tell a confident pick from a coin flip here.
+  Practice unchanged (trend branch only). Best stays v6.
+
 ## Local measurements (practice answers reconstructed from the kit's
 published refresh aggregates: 04:30 read, 3,868 players, 4,276 earned,
 100% trophy unchanged, other trophies ×0.2208 — proxy, not the true rates)
@@ -95,25 +108,30 @@ published refresh aggregates: 04:30 read, 3,868 players, 4,276 earned,
 | v4 | 0.1066 | 0.008 pp | 0.98 |
 | v5 | 0.1066 | 0.008 pp | 0.98 |
 | **v6 (this entry)** | **0.1066** | **0.008 pp** | **0.98** |
+| v7 (rejected) | 0.1066 | 0.008 pp | 0.98 |
 
 Synthetic finals (2 days of reads, answer at day 7; each a different truth
 family and refresh/N regime — synth3/4 were generated for v2, after v1 was
 chosen, to avoid overfitting one synthetic family):
 
-| synthetic | truth family | v1 loss | v2 loss | v3 loss | v4 loss | v5 loss | v6 loss |
-|---|---|---|---|---|---|---|---|
-| synth1 | saturating exponential | 0.2465 | 0.2548 | 0.1833 | 0.1698 | 0.1697 | 0.1697 |
-| synth2 | logistic in log-time | 0.2872 | 0.2805 | 0.2107 | 0.2144 | 0.2133 | 0.2133 |
-| synth3 | Gompertz, refresh 5–9 h, N saturating | 1.5776 | 0.7427 | 0.7111 | 0.5155 | 0.2893 | 0.2893 |
-| synth4 | power saturation, refresh 1–2 h, N exponential | 0.2807 | 0.2556 | 0.1779 | 0.1824 | 0.1810 | 0.1810 |
-| synth5 | Gompertz late-rise, 6 snapshots, N jumps ×1.8–4 | — | — | — | 2.0942 | 0.3731 | 0.3731 |
-| synth6 | delayed logistic, 9 snapshots, N jumps ×1.5–3 | — | — | — | 0.3694 | 0.3568 | 0.3568 |
-| synth7 | power saturation, 6 snapshots, N jumps + one ×6 | — | — | — | 0.1930 | 0.1909 | 0.1909 |
-| synth8 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5 | — | — | — | 3.2039 | 0.5879 | 0.4668 |
-| synth9 | power saturation, 4 snapshots, N jumps ×2–4 | — | — | — | 0.1856 | 0.1838 | 0.1948 |
-| **mean 1–4** | | **0.5980** | **0.3834** | **0.3208** | **0.2705** | **0.2133** | **0.2133** |
-| **mean 1–7** | | | | | **0.5341** | **0.2534** | **0.2534** |
-| **mean 1–9** | | | | | **0.7920** | **0.2829** | **0.2706** |
+| synthetic | truth family | v1 loss | v2 loss | v3 loss | v4 loss | v5 loss | v6 loss | v7 loss |
+|---|---|---|---|---|---|---|---|---|
+| synth1 | saturating exponential | 0.2465 | 0.2548 | 0.1833 | 0.1698 | 0.1697 | 0.1697 | 0.1697 |
+| synth2 | logistic in log-time | 0.2872 | 0.2805 | 0.2107 | 0.2144 | 0.2133 | 0.2133 | 0.2133 |
+| synth3 | Gompertz, refresh 5–9 h, N saturating | 1.5776 | 0.7427 | 0.7111 | 0.5155 | 0.2893 | 0.2893 | 0.2893 |
+| synth4 | power saturation, refresh 1–2 h, N exponential | 0.2807 | 0.2556 | 0.1779 | 0.1824 | 0.1810 | 0.1810 | 0.1810 |
+| synth5 | Gompertz late-rise, 6 snapshots, N jumps ×1.8–4 | — | — | — | 2.0942 | 0.3731 | 0.3731 | 0.3731 |
+| synth6 | delayed logistic, 9 snapshots, N jumps ×1.5–3 | — | — | — | 0.3694 | 0.3568 | 0.3568 | 0.3568 |
+| synth7 | power saturation, 6 snapshots, N jumps + one ×6 | — | — | — | 0.1930 | 0.1909 | 0.1909 | 0.1909 |
+| synth8 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5 | — | — | — | 3.2039 | 0.5879 | 0.4668 | 0.5837 |
+| synth9 | power saturation, 4 snapshots, N jumps ×2–4 | — | — | — | 0.1856 | 0.1838 | 0.1948 | 0.1852 |
+| synth10 | delayed logistic, **3 snapshots**, N jumps ×2–5 | — | — | — | — | 0.4501 | 0.4893 | 0.4646 |
+| synth11 | saturating exponential, 4 snapshots, N jumps ×2–4 | — | — | — | — | 0.1934 | 0.2001 | 0.1951 |
+| synth12 | saturating exponential, **3 snapshots**, N jumps ×2–5 | — | — | — | — | 0.2503 | 0.2033 | 0.2497 |
+| **mean 1–4** | | **0.5980** | **0.3834** | **0.3208** | **0.2705** | **0.2133** | **0.2133** | **0.2133** |
+| **mean 1–7** | | | | | **0.5341** | **0.2534** | **0.2534** | **0.2534** |
+| **mean 1–9** | | | | | **0.7920** | **0.2829** | **0.2706** | **0.2825** |
+| **mean 1–12** | | | | | | **0.2866** | **0.2774** | **0.2877** |
 
 Synth5–7 (generated for v5, after v4 was chosen, to stress the few-snapshot
 regime: 6–9 distinct snapshots instead of 9–30, refreshes 6–13 h apart,
@@ -122,7 +140,14 @@ the harsh set: v4 collapses on synth5 (2.09) and v5 rescues it (0.37) with
 no synthetic regressing against v4. The final case's snapshot count is
 unknown — the house reads every 10 minutes through the final, but Exophase
 refreshes on its own schedule — so the few-snapshot regime is a real risk,
-not a synthetic artifact.
+not a synthetic artifact. Synth10–12 (generated for v7, after v6 was chosen,
+to test the ≤ 4 scope's generality across families: synth10 delayed
+logistic at 3 snapshots, synth11 saturating exponential at 4, synth12
+saturating exponential at 3) show the scope is mixed, not universal:
+v6 beats argmin on synth8 (+0.12) and synth12 (+0.05) but loses on
+synth9 (−0.01), synth10 (−0.04) and synth11 (−0.01) — net mean 1–12
+0.2774 vs argmin's 0.2866, so v6 still wins overall, but the 4-snapshot
+cases all favour the pick, which motivates the v8 scope test.
 
 v3–v6 change only the trend branch, so the practice loss is unchanged
 from v2; the synthetic mean improves at each step. v6 changes only the
@@ -171,11 +196,14 @@ the real `main.ts`; variant files in the work dir):
   worse everywhere that matters (mean 1–4 0.2290/0.2327, synth8
   0.66/0.62). The shrinkage, not a hard clip, is the right shape.
 
-Next idea worth trying for v7: a fresh synthetic in the 3–4 snapshot
-regime with a *different* truth family (e.g. delayed logistic or
-saturating exponential at 3 snapshots) — v6's win rests on synth8
-(Gompertz) plus synth9 (power, small cost), so the scope's generality
-across families is the untested claim; and a per-trophy *selection
-confidence* rule (use median-of-4 only when the top-two families'
-SSEs are within, say, 20% of each other, else keep the argmin pick)
-could keep synth9's pick while still rescuing synth8.
+Next idea worth trying for v8: narrow the median-of-4 scope to ≤ 3
+snapshots (argmin at 4). Both 4-snapshot cases so far (synth9 power,
+synth11 satexp) favour the pick — but that
+evidence is confounded with truth family (both 4-snapshot cases are
+early-rise families), so the honest test is two FRESH 4-snapshot cases
+with late-rise truth (Gompertz, delayed logistic) generated after the
+hypothesis: if the pick still wins there, the ≤ 3 scope is a tested win,
+not a post-hoc boundary pick. The remaining known weakness is 3-snapshot
+delayed logistic (synth10: median 0.4893 vs pick 0.4501) — no
+snapshot-count rule can fix a family-dependent loss; a 5th family
+(delayed logistic) in the candidate pool is the other candidate idea.
