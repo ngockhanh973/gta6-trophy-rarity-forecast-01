@@ -1,4 +1,33 @@
-// gta6-trophy-rarity-forecast-01 — v18.
+// gta6-trophy-rarity-forecast-01 — v19.
+//
+// v19 changes over v18:
+//  - TREND branch, few snapshots only: growth dampening gamma 0.65 at
+//    EXACTLY 3 snapshots (was 0.7 from v12), 0.8 at 4+ snapshots. The
+//    remaining late-rise overshoot after v18 lives at 3 snapshots, and
+//    the v12 gamma sweep (0.6 lost, 0.7 kept) was measured on the
+//    pre-v16/v18 base, so the knob was re-probed on the new base with
+//    fresh seeds 27/28 (delayed seed 161, Gompertz seed 172) generated
+//    BEFORE the variant existed. Wins BOTH gates vs v18: mean 1-20
+//    0.3045 -> 0.3041, 3-snapshot mean (9 cases) 0.3748 -> 0.3739;
+//    practice unchanged 0.1066. Caveat, stated plainly: the win is
+//    noise-level (0.0004-0.0009) — mean 1-26 and 3-snapshot 15-case
+//    mean TIE v18 exactly (0.3243 / 0.3809), 3-snapshot 13-case mean
+//    also ties (0.3773), and the fresh pair 25/26 loses by 0.0002
+//    (s25 wins -0.0084, s26 loses +0.0089). But the fresh pair 27/28
+//    wins (0.3819 -> 0.3780), all six fresh seeds 23-28 win
+//    (0.3831 -> 0.3804), and 3-snapshot 17-case mean wins 0.3810 ->
+//    0.3806, so the promotion follows the same fresh-seed logic as
+//    v11/v13/v16/v18. Flatness check, same round: gamma 0.6 on the new
+//    base wins the two gates by MORE (mean 1-20 0.3032, 3-snap9
+//    0.3717) but LOSES on the fresh pair 25/26 (+0.0055, s26 +0.0259),
+//    mean 1-26 (0.3250) and 3-snap15 (0.3822) — so 0.6 is NOT kept;
+//    the gamma axis is flat within noise (3-snap13: 0.3779/0.3773/
+//    0.3773 for 0.6/0.65/0.7) and 0.65 is the middle, safest point.
+//    Per-case vs v18 (13 three-snapshot cases): wins 8 (s10/15/17/
+//    19/20/21/23/24), loses 5 (s8 +0.0100, s16 +0.0084, s22 +0.0208,
+//    s12 +0.0032, s18 +0.0050). Practice unchanged. Best is now v19.
+//
+// v18 changes over v16 (v17 was a rejected attempt, see README):
 //
 // v18 changes over v16 (v17 was a rejected attempt, see README):
 //  - TREND branch, few snapshots only: ADAPTIVE trim by pool spread.
@@ -490,9 +519,10 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     const floorRate = ((lastRate / 100) * lastN) / nStar * 100;
     // v4: shrink the fitted growth over the last rate toward no growth.
     const lr = Math.max(lastRate, 0.01);
-    // v12: stronger dampening (gamma 0.7) at <= 3 snapshots only — the
-    // overshoot bias lives there; 4+ snapshots keep gamma 0.8.
-    if (med > lr) med = lr * Math.pow(med / lr, snaps.length <= 3 ? 0.7 : GROWTH_DAMPEN);
+    // v19: gamma 0.65 at exactly 3 snapshots (v12's 0.7 re-probed on the
+    // v16/v18 base; gamma 0.6 also measured and rejected — see header).
+    // The overshoot bias lives there; 4+ snapshots keep gamma 0.8.
+    if (med > lr) med = lr * Math.pow(med / lr, snaps.length <= 3 ? 0.65 : GROWTH_DAMPEN);
     // v5: close at most 60% of the remaining headroom to 100%.
     med = Math.min(med, lr + HEADROOM_CLOSE * (100 - lr));
     med = Math.min(99.99, Math.max(0.01, Math.max(med, floorRate)));
@@ -519,7 +549,7 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     // the middle value).
     const xform4 = (mm: number): number => {
       let v = mm;
-      if (v > lr) v = lr * Math.pow(v / lr, snaps.length <= 3 ? 0.7 : GROWTH_DAMPEN);
+      if (v > lr) v = lr * Math.pow(v / lr, snaps.length <= 3 ? 0.65 : GROWTH_DAMPEN);
       v = Math.min(v, lr + HEADROOM_CLOSE * (100 - lr));
       return Math.min(99.99, Math.max(0.01, Math.max(v, floorRate)));
     };
