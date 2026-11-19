@@ -494,6 +494,38 @@ often identical and a refresh arrives as one jump in `players_tracked`.
   undershoots (−0.280 on its single case); both fresh seeds overshoot
   (synth29 median +0.318, synth30 +0.223).
 
+- **v21 (REJECTED): γ = 0.5 for the delayed-logistic family only, at
+  ≤ 3 snapshots (on top of v19).** The signed-error check from round 8
+  still shows overshoot on late-rise truth (Gompertz median +0.184
+  logit, fresh seeds +0.32/+0.22), so instead of the q40 pool quantile
+  — which sits ABOVE lowest-3 (between lowest-3 and middle-3) and
+  would raise the median, the wrong direction — the one genuinely
+  different median rule tried was family-specific dampening: the
+  delayed family's transformed median gets γ = 0.5 instead of 0.65
+  (variant `var-v21-gammad05.ts` in the work dir), self-gating since γ
+  only bites when that family's median exceeds the last rate; all
+  other families keep 0.65 and the low3/mid3 structure, pick, spread
+  and tier-shrink are untouched. It LOSES on every aggregate,
+  measured with the real `main.ts`: mean 1–20 0.3041 → 0.3057,
+  3-snapshot mean (9 cases) 0.3739 → 0.3774, mean 1–30 0.3356 →
+  0.3383, 3-snapshot 19-case mean 0.3868 → 0.3911, fresh pair 29/30
+  0.4399 → 0.4414 (synth29 wins −0.0014, synth30 loses +0.0045);
+  practice unchanged at 0.1066. Per truth family it splits exactly as
+  the v16 split predicted: it helps delayed-logistic slightly (7 of 9
+  delayed 3-snapshot cases win, −0.001 to −0.004) but loses badly on
+  Gompertz (synth16 +0.0206, synth18 +0.0216, synth22 +0.0240,
+  synth26 +0.0273) and on the single satexp case (+0.0032, already
+  undershooting). Mechanism: on Gompertz truth the delayed family is
+  often the LOW or MIDDLE family (it fits the flat start well), so
+  pulling it down pulls low3/mid3 down into undershoot — the "delayed
+  extrapolates high" premise was wrong on Gompertz truth; diag20's
+  drank ≥ 3 signal was about the low3-vs-mid3 choice, not about the
+  delayed median's level. No code change; best stays v19. The median
+  family is now closed: two genuinely different median rules in this
+  round (family-gated rescue extension, family-specific γ) both lost,
+  the second decisively — further median-rule attempts need a new
+  diagnostic signal, not another point on the trim/γ axes.
+
 - **v19: γ = 0.65 at exactly 3 snapshots (on top of v18).** The v12
   γ sweep (0.6 lost, 0.7 kept) was measured on the pre-v16/v18 base, so
   the knob was re-probed on the new base: γ = 0.65 only at 3 snapshots
@@ -603,6 +635,8 @@ published refresh aggregates: 04:30 read, 3,868 players, 4,276 earned,
 | **v19 (this entry)** | **0.1066** | **0.008 pp** | **0.98** |
 | v17 (rejected) | 0.1066 | 0.008 pp | 0.98 |
 | v7 (rejected) | 0.1066 | 0.008 pp | 0.98 |
+| v20 (rejected) | 0.1066 | 0.008 pp | 0.98 |
+| v21 (rejected) | 0.1066 | 0.008 pp | 0.98 |
 
 Synthetic finals (2 days of reads, answer at day 7; each a different truth
 family and refresh/N regime — synth3/4 were generated for v2, after v1 was
@@ -742,17 +776,20 @@ do not re-sweep any of the three):
    (delayed cases have 0–2 rescue trophies, Gompertz 2–20), and the
    best-looking rule (extend rescue to grank ≥ 3) wins by 0.0006/
    0.0001, pure noise on 22 trophies. The family-aware family is
-   closed. Next for v21 (one variant at a time, same two gates):
-   generate two more fresh 3-snapshot seeds (29/30) FIRST as arbiter,
-   then try a genuinely different median rule — the current family is
-   at its ceiling (v19→v20 moved nothing), and the only sub-noise lead
-   left (grank ≥ 3 extension) must be confirmed on fresh seeds before
-   any build. Deadline 21/11 18:30 — one variant at a time, no
-   parallel tuning.
+   closed. v20 BUILT that rule as code (see v20 above) and it lost on
+   the fresh seeds 29/30, confirming the diagnosis. v21 then tried the
+   one remaining genuinely different median rule — γ = 0.5 for the
+   delayed family only — and lost decisively on every aggregate (see
+   v21 above). The median family is now CLOSED: two different median
+   rules in this round both lost, so no further median-rule variant is
+   worth trying before the deadline (21/11 18:30) without a new
+   diagnostic signal. What remains open is not the median: the spread
+   is untouched since v13 and the flat branch since v2, but neither
+   has a diagnostic lead behind it — do not re-sweep them blind.
 3. *More fresh 3-snapshot seeds before any further scope change* —
-   the 3-snapshot verdict now rests on 17 cases (synth27/28 added for
-   v19, seeds 161/172). Two more seeds would firm up a v20 decision
-   before the deadline (21/11 18:30). Note the diminishing returns:
+   the 3-snapshot verdict now rests on 19 cases (synth29/30 added for
+   v20/v21, seeds 181/191). Two more seeds would firm up any future
+   decision before the deadline (21/11 18:30). Note the diminishing returns:
    v9 → v19 moved mean 1–18 only 0.3147 → 0.2989, and each step since
    v11 has been ~0.001–0.003 — the current family is near its
    ceiling, so a new version needs a genuinely different median rule,
