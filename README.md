@@ -447,8 +447,20 @@ often identical and a refresh arrives as one jump in `players_tracked`.
   means the delayed family itself extrapolates high — the pool's high
   end is late-rise shaped, not a blow-up — the same phenomenon v18
   found from the dispersion angle (low families absurdly low at
-  extreme dispersion). No code change; best stays v19. The
-  family-aware family is now closed alongside spread, γ, SSE,
+  extreme dispersion). Build, 19/11 (variant `var-v20-grank3.ts` in
+  the work dir): the one sub-noise lead WAS built as code, to be
+  confirmed on fresh seeds 29/30 generated BEFORE the build (round 8
+  below): at ≤ 3 snapshots the rescue becomes mid3 when stdLogit ≥ 0.8
+  OR the Gompertz family's rank among the five transformed medians is
+  ≥ 3 (cands order satexp/logistic/gompertz/power/delayed, rank
+  0 = lowest). Measured with the real `main.ts`, it reproduces the
+  diagnostic exactly on the old set (3-snap17 0.3806 → 0.3800,
+  3-snap9 0.3739 → 0.3738, mean 1–20 ties 0.3041, mean 1–28 0.3281 →
+  0.3278) — but LOSES on the fresh pair 29/30 (0.4399 → 0.4404:
+  synth29 wins −0.0001, synth30 loses +0.0012), so the pre-registered
+  fresh-seed gate fails and the rule is NOT kept. The diagnostic's
+  0.0006/0.0001 was noise, as suspected. No code change; best stays
+  v19. The family-aware family is now closed alongside spread, γ, SSE,
   logit-averaging and Winsorize.
 
 - **Fresh-seed validation, round 7 (synth27/28, before v19).**
@@ -462,6 +474,25 @@ often identical and a refresh arrives as one jump in `players_tracked`.
   pairs (23/24: 0.3594, 25/26: 0.4211). The 3-snapshot verdict now rests
   on 17 cases; on all 28 cases v18 is mean 1–28 0.3284, 3-snapshot
   17-case mean 0.3810.
+
+- **Fresh-seed validation, round 8 (synth29/30, before v20/v21).**
+  `gen_synth2930.py` in the work dir, not committed: synth29 delayed
+  logistic, seed 181, 3 snapshots; synth30 Gompertz late-rise, seed 191,
+  3 snapshots — both gave 3 distinct snapshots on the first seed tried
+  (seed chosen on the snapshot-count criterion only, before any loss was
+  measured, and before either variant existed). v19 on them: synth29
+  0.5018 (miss 10.88 pp, cov 0.91), synth30 0.3780 (miss 9.32 pp,
+  cov 0.95) — pair mean 0.4399, the worst fresh pair yet (23/24:
+  0.3594, 25/26: 0.4211, 27/28: 0.3819); synth29 is the worst delayed
+  case since synth15. The 3-snapshot verdict now rests on 19 cases;
+  on all 30 cases v19 is mean 1–30 0.3356, 3-snapshot 19-case mean
+  0.3868. Signed-error check on the v19 medians (all 19 cases,
+  `signed_err2930.py` in the work dir, regenerates the v19 outputs
+  itself): Gompertz truth still OVERSHOOTS
+  (mean +0.078, median +0.184 logit, only 35% undershoot), delayed is
+  near-balanced (mean +0.073, median −0.021, 56% undershoot), satexp
+  undershoots (−0.280 on its single case); both fresh seeds overshoot
+  (synth29 median +0.318, synth30 +0.223).
 
 - **v19: γ = 0.65 at exactly 3 snapshots (on top of v18).** The v12
   γ sweep (0.6 lost, 0.7 kept) was measured on the pre-v16/v18 base, so
@@ -607,6 +638,8 @@ chosen, to avoid overfitting one synthetic family):
 | synth26 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 151 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.4921 | 0.5010 |
 | synth27 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 161 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.4445 | 0.4389 |
 | synth28 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 172 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.3194 | 0.3170 |
+| synth29 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 181 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.5018 |
+| synth30 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 191 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.3780 |
 | **mean 1–4** | | **0.5980** | **0.3834** | **0.3208** | **0.2705** | **0.2133** | **0.2133** | **0.2133** | **0.2133** | **0.2154** | **0.2154** | **0.2154** | **0.2154** | 0.2154 | 0.2153 |
 | **mean 1–7** | | | | | **0.5341** | **0.2534** | **0.2534** | **0.2534** | **0.2534** | **0.2491** | **0.2491** | **0.2491** | **0.2491** | 0.2491 | 0.2491 |
 | **mean 1–9** | | | | | **0.7920** | **0.2829** | **0.2706** | **0.2825** | **0.2694** | **0.2584** | **0.2592** | **0.2588** | **0.2585** | 0.2591 | 0.2535 | 0.2546 |
@@ -625,6 +658,8 @@ chosen, to avoid overfitting one synthetic family):
 | **mean 3-snap (15 cases, +21/22/23/24/25/26)** | | | | | | | | | | | | | | | 0.3809 | 0.3809 |
 | **mean 1–28** | | | | | | | | | | | | | | | | 0.3284 | 0.3281 |
 | **mean 3-snap (17 cases, +21/22/23/24/25/26/27/28)** | | | | | | | | | | | | | | | | 0.3810 | 0.3806 |
+| **mean 1–30** | | | | | | | | | | | | | | | | | 0.3356 |
+| **mean 3-snap (19 cases, +21/22/23/24/25/26/27/28/29/30)** | | | | | | | | | | | | | | | | | 0.3868 |
 
 Synth5–7 (generated for v5, after v4 was chosen, to stress the few-snapshot
 regime: 6–9 distinct snapshots instead of 9–30, refreshes 6–13 h apart,
