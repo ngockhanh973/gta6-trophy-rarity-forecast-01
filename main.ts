@@ -1,4 +1,19 @@
-// gta6-trophy-rarity-forecast-01 — v8.
+// gta6-trophy-rarity-forecast-01 — v9.
+//
+// v9 changes over v8 (see README for measurements):
+//  - TREND branch: a 5th candidate family, delayed logistic —
+//    r = A / (1 + exp(-k*(log1p(max(0,t-D)) - x0))), D in 6..96 h — joins
+//    the pool. It is the only synthetic truth family with no matching
+//    candidate (delayed logistic: synth6/10/14); D=0 is excluded because
+//    the plain logistic already covers it, so the 5th family is distinct.
+//    Argmin-SSE now picks over 5 families, and the few-snapshot median
+//    becomes the median-of-5 (middle value) at <= 3 snapshots. The median
+//    over the original 4 (v9b) also beats v8 but loses to median-of-5
+//    (mean 1-14 0.2750 vs 0.2713: synth8 0.4450 vs 0.3981). Extending the
+//    median to <= 4 snapshots (v9c) loses (mean 1-14 0.2851, worse than
+//    v8: synth13 0.2869 -> 0.4170), confirming v8's scope with 5 families.
+//    Mean 1-14 0.2815 -> 0.2713, mean 1-9 0.2694 -> 0.2584; practice
+//    unchanged (trend branch only). Runtime still ~0.05 s/case.
 //
 // v8 changes over v6 (v7 was a rejected attempt, see README):
 //  - TREND branch, few snapshots only: the median-of-4 now applies only
@@ -223,7 +238,7 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
   // steeply (early growth is fast, late growth flattens as trophies
   // saturate), so each trophy is fitted with a saturating curve in rate
   // space. v1 bet everything on one family (saturating exponential); v2
-  // fits four and keeps, per trophy, the one with the lowest in-sample
+  // fits five and keeps, per trophy, the one with the lowest in-sample
   // squared error in rate space, so each trophy's growth speed and shape
   // are estimated from its own history and a wrong family cannot drag
   // every trophy with it:
@@ -231,6 +246,7 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
   //   logistic: r = A / (1 + exp(-k*(ln(1+t) - x0)))
   //   gompertz: r = A * exp(-exp(-k*(t - t0)))
   //   power:    r = A * (t/(t+tau))^p
+  //   delayed logistic (v9): r = A / (1 + exp(-k*(ln(1+max(0,t-D)) - x0)))
   // Each family's scale (c,R / A) is solved by least squares at fixed shape
   // parameters, which are grid-searched. Selection by rate-space SSE: a
   // logit-space SSE was tried and rejected — it is dominated by the near-
@@ -332,6 +348,26 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
       cands.push([a * ((targetH / (targetH + tau)) ** p), sse,
         (tj) => (tj > 0 ? a * ((tj / (tj + tau)) ** p) : 0), a]);
     }
+    // 5. Delayed logistic (v9): r = A / (1 + exp(-k*(log1p(max(0,t-D)) - x0))).
+    // The only synthetic truth family with no matching candidate: flat ~0
+    // until delay D, then logistic in log-time. D=0 is excluded (the plain
+    // logistic above already covers it), so this is a distinct 5th family.
+    {
+      let best: [number, number, number, number, number] | null = null; // A,sse,D,k,x0
+      for (const D of [6, 12, 24, 48, 72, 96]) {
+        for (const k of [0.5, 1, 1.5, 2, 3]) {
+          for (const v of [2, 6, 12, 24, 48, 96, 168]) {
+            const x0 = Math.log1p(v);
+            const g = ts.map((tj) => 1 / (1 + Math.exp(-k * (Math.log1p(Math.max(0, tj - D)) - x0))));
+            const [a, sse] = fitScale(g, rs);
+            if (best === null || sse < best[1]) best = [a, sse, D, k, x0];
+          }
+        }
+      }
+      const [a, sse, D, k, x0] = best as [number, number, number, number, number];
+      cands.push([a / (1 + Math.exp(-k * (Math.log1p(Math.max(0, targetH - D)) - x0))), sse,
+        (tj) => a / (1 + Math.exp(-k * (Math.log1p(Math.max(0, tj - D)) - x0))), a]);
+    }
     // Lowest in-sample SSE wins; ties keep the earliest family (satexp).
     let pick = cands[0];
     for (const cand of cands) if (cand[1] < pick[1]) pick = cand;
@@ -359,20 +395,21 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     const earnCount = Math.max(1, (lastRate / 100) * lastN);
     const s = Math.min(1.5, Math.max(0.55,
       Math.sqrt((RW_SIGMA * Math.sqrt(horizonDays)) ** 2 + Math.max(resid, 0.15) ** 2 + 0.15 ** 2 + BINOM_SPREAD_NUM / earnCount)));
-    // v6: median of the four families' (transformed) target medians, used
-    // as the median instead of the picked family's when snapshots <= 4
-    // (applied in the tier-shrinkage step below). Each family's median is
-    // transformed exactly like the picked median, so the four values are
-    // comparable; the median of four is the mean of the middle two.
+    // v6/v9: median of the five families' (transformed) target medians, used
+    // as the median instead of the picked family's when snapshots <= 3
+    // (applied in the tier-shrinkage step below; v8 narrowed the scope
+    // from <= 4 to <= 3, v9 keeps it). Each family's median is
+    // transformed exactly like the picked median, so the five values are
+    // comparable; the median of five is the middle value.
     const xform4 = (mm: number): number => {
       let v = mm;
       if (v > lr) v = lr * Math.pow(v / lr, GROWTH_DAMPEN);
       v = Math.min(v, lr + HEADROOM_CLOSE * (100 - lr));
       return Math.min(99.99, Math.max(0.01, Math.max(v, floorRate)));
     };
-    const meds4 = cands.map((cd) => xform4(cd[0])).sort((a, b) => a - b);
-    const med4 = (meds4[1] + meds4[2]) / 2;
-    return { id: t.id, q: quantiles(logit(med), s), med, s, lastRate, floorRate, tier: t.tier, asym: pick[3], med4 };
+    const meds5 = cands.map((cd) => xform4(cd[0])).sort((a, b) => a - b);
+    const medFew = meds5[2];
+    return { id: t.id, q: quantiles(logit(med), s), med, s, lastRate, floorRate, tier: t.tier, asym: pick[3], medFew };
   });
   // v5: tier-asymptote shrinkage. A single trophy's fitted asymptote is
   // barely identified from a handful of snapshots, so pull it 25% toward
@@ -392,7 +429,7 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
   return rows.map((r) => {
     const tm = tierMed.get(r.tier) ?? r.asym;
     const aPrime = TIER_SHRINK_OWN * r.asym + (1 - TIER_SHRINK_OWN) * tm;
-    let m = snaps.length <= 3 ? r.med4 : r.med;
+    let m = snaps.length <= 3 ? r.medFew : r.med;
     if (m > r.lastRate && r.asym > 0) m = r.lastRate + (m - r.lastRate) * (aPrime / r.asym);
     const lr2 = Math.max(r.lastRate, 0.01);
     m = Math.min(m, lr2 + HEADROOM_CLOSE * (100 - lr2));
