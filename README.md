@@ -253,6 +253,44 @@ often identical and a refresh arrives as one jump in `players_tracked`.
   family is now closed: ×1.5 and ×1.2 both lose on mean 1–14, and
   ×2.0 would cost more on synth12; no further spread knob is worth
   trying.
+- **v14 (REJECTED): SSE-weighted trimmed mean at ≤ 3 snapshots.** The
+  one median idea not yet tried: weight the middle three families by
+  in-sample SSE instead of a flat average. Three weight forms, each
+  measured on practice + synth1–20 with the real `main.ts` (variant
+  files `var-v14*.ts` in the work dir; the weights use the families'
+  rate-space SSEs, temperature/floor normalised by the median SSE of
+  the five so the scale is per-trophy): (a) w = 1/(SSE + 0.1·medianSSE)
+  — mean 1–20 0.3185, 3-snap mean (9 cases) 0.4059; (b) w =
+  exp(−SSE/medianSSE) — mean 1–20 0.3174, 3-snap 0.4033; (c) w = 1/SSE
+  raw — mean 1–20 0.3215, 3-snap 0.4125. All three LOSE to v13
+  (mean 1–20 0.3156, 3-snap 0.3993) on both gates, and on 7–8 of the
+  9 three-snapshot cases each — only synth20 wins consistently
+  (0.3944 → 0.3657/0.3677/0.3707) and synth16 marginally in (a)/(b).
+  The raw 1/SSE form is worst, as expected: with 3 points one family
+  often fits near-perfectly by chance, so the weights collapse toward
+  the argmin pick — the exact failure v7 documented. The mechanism is
+  visible in the misses: weighting pulls the median toward the
+  best-fitting family, and at 3 points the best-fitting family is
+  usually the early-riser that overshoots (the signed-error bias),
+  so the weighted median inherits more overshoot, not less. v7's
+  verdict stands and now extends to weighting: in-sample SSE cannot
+  separate right from wrong families at 3 snapshots, in any form
+  tried (gate, 1/SSE, exp(−SSE/T)). No code change; best stays v13.
+  The SSE family is now closed alongside spread and γ.
+
+- **Fresh-seed validation, round 3 (synth19/20, before v14).**
+  `gen_synth1920.py` in the work dir, not committed: synth19 delayed
+  logistic, seed 81, 3 snapshots; synth20 Gompertz late-rise, seed 91,
+  3 snapshots — both gave 3 distinct snapshots on the first seed tried
+  (seed chosen on the snapshot-count criterion only, before any loss
+  was measured). v13 on them: synth19 0.3935 (miss 10.24 pp, cov 0.87),
+  synth20 0.3944 (miss 14.42 pp, cov 0.96) — both in the same bad
+  0.39–0.49 range as synth8/10/15–18, so the 3-snapshot regime is
+  still the worst regime on every seed. Mean 1–20 for v13 is 0.3156
+  (mean 1–18 0.3068); 3-snapshot mean over 9 cases 0.3993 (7 cases
+  0.4008). The fresh seeds also arbitrate v14: all three weight forms
+  lose on synth19 (0.3935 → 0.4089–0.4135) and only win synth20, so
+  the rejection is not an old-seed artifact.
 
 - **Fresh-seed validation, round 2 (synth17/18, after v12).**
   `gen_synth1718.py` in the work dir, not committed: synth17 delayed
@@ -308,6 +346,8 @@ chosen, to avoid overfitting one synthetic family):
 | synth16 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 63 | — | — | — | — | — | — | — | — | 0.4627 | 0.4295 | 0.4155 | 0.4046 |
 | synth17 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 71 | — | — | — | — | — | — | — | — | 0.4226 | 0.4158 | 0.4075 | 0.3992 |
 | synth18 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 72 | — | — | — | — | — | — | — | — | 0.4710 | 0.4397 | 0.4298 | 0.4228 |
+| synth19 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 81 | — | — | — | — | — | — | — | — | — | — | — | — | 0.3935 |
+| synth20 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 91 | — | — | — | — | — | — | — | — | — | — | — | — | 0.3944 |
 | **mean 1–4** | | **0.5980** | **0.3834** | **0.3208** | **0.2705** | **0.2133** | **0.2133** | **0.2133** | **0.2133** | **0.2154** | **0.2154** | **0.2154** | **0.2154** |
 | **mean 1–7** | | | | | **0.5341** | **0.2534** | **0.2534** | **0.2534** | **0.2534** | **0.2491** | **0.2491** | **0.2491** | **0.2491** |
 | **mean 1–9** | | | | | **0.7920** | **0.2829** | **0.2706** | **0.2825** | **0.2694** | **0.2584** | **0.2592** | **0.2588** | **0.2585** |
@@ -315,7 +355,9 @@ chosen, to avoid overfitting one synthetic family):
 | **mean 1–14** | | | | | | **0.2907** | **0.2982** | **0.2932** | **0.2815** | **0.2713** | **0.2720** | **0.2714** | **0.2719** |
 | **mean 1–16** | | | | | | | | | | **0.2982** | **0.2959** | **0.2943** | **0.2938** |
 | **mean 1–18** | | | | | | | | | | **0.3147** | **0.3105** | **0.3081** | **0.3068** |
+| **mean 1–20** | | | | | | | | | | | | | | **0.3156** |
 | **mean 3-snap (8/10/12/15/16/17/18)** | | | | | | | | | | **0.4211** | **0.4102** | **0.4041** | **0.4008** |
+| **mean 3-snap (8/10/12/15/16/17/18/19/20)** | | | | | | | | | | | | | | **0.3993** |
 
 Synth5–7 (generated for v5, after v4 was chosen, to stress the few-snapshot
 regime: 6–9 distinct snapshots instead of 9–30, refreshes 6–13 h apart,
@@ -383,24 +425,30 @@ the real `main.ts`; variant files in the work dir):
   worse everywhere that matters (mean 1–4 0.2290/0.2327, synth8
   0.66/0.62). The shrinkage, not a hard clip, is the right shape.
 
-Next ideas worth trying for v14 (the v12/v13 rounds closed the spread
-family — ×1.5 rejected, ×1.2 kept — and the γ knob — 0.6 rejected,
-0.7 kept; do not re-sweep either):
-1. *SSE-weighted trimmed mean at ≤ 3 snapshots* — the one median idea
-   not yet tried: weight the middle three families by in-sample SSE
-   (better-fitting families count more) instead of a flat average.
-   Risky: v7 showed in-sample SSE cannot separate right from wrong
-   picks at 3–4 points, so the weights may be noise — measure on
-   synth1–18 and keep only a clear win on the 3-snapshot mean AND
-   mean 1–18.
-2. *More fresh 3-snapshot seeds before any further scope change* —
-   the 3-snapshot verdict now rests on 7 cases; two more seeds (one
-   delayed, one Gompertz) would firm up a v14 decision before the
-   deadline (21/11 18:30). Note the diminishing returns: v9 → v13
-   moved mean 1–18 only 0.3147 → 0.3068, and each step since v11 has
-   been ~0.001–0.002 — the current family is near its ceiling, so a
-   new version needs a genuinely different median rule, not another
-   knob on the same one.
-3. *More fresh 3-snapshot seeds* — the 3-snapshot verdict now rests on
-   5 cases; one more delayed-logistic and one more Gompertz seed would
-   firm up any v12 scope decision before the deadline.
+Next ideas worth trying for v15 (v14 closed the SSE family — gate,
+1/SSE and exp(−SSE/T) all lose; spread and γ were already closed —
+do not re-sweep any of the three):
+1. *SSE-weighted trimmed mean at ≤ 3 snapshots* — TRIED as v14 and
+   REJECTED (all three weight forms lose on both gates; see v14
+   above). The SSE family is closed.
+2. *v15 candidate — a genuinely different median rule, not a knob:*
+   average the middle three transformed medians in LOGIT space
+   instead of rate space (mean of logit(m), then inv-logit), or
+   asymmetrically trim only the top (average the lowest three,
+   meds5[0..2]). Both directly counter the measured overshoot bias
+   (signed error +0.35/+0.51 logit on late-rise 3-snapshot cases):
+   logit-averaging downweights high outliers more than rate-averaging
+   does, and a lower trim drops the early-rising blow-up family
+   outright. Risk: synth12 is balanced, so both may pay there — the
+   same single-case cost that sank the ×1.5 spread; measure each on
+   synth1–20 + fresh seeds and keep only a win on BOTH mean 1–20 and
+   the 9-case 3-snapshot mean. Deadline 21/11 18:30 — one variant at
+   a time, no parallel tuning.
+3. *More fresh 3-snapshot seeds before any further scope change* —
+   the 3-snapshot verdict now rests on 9 cases (synth19/20 added for
+   v14, seeds 81/91). Two more seeds would firm up a v15 decision
+   before the deadline (21/11 18:30). Note the diminishing returns:
+   v9 → v13 moved mean 1–18 only 0.3147 → 0.3068, and each step since
+   v11 has been ~0.001–0.002 — the current family is near its
+   ceiling, so a new version needs a genuinely different median rule,
+   not another knob on the same one.
