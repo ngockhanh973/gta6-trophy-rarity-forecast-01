@@ -95,8 +95,11 @@ chosen, to avoid overfitting one synthetic family):
 | synth5 | Gompertz late-rise, 6 snapshots, N jumps ×1.8–4 | — | — | — | 2.0942 | 0.3731 |
 | synth6 | delayed logistic, 9 snapshots, N jumps ×1.5–3 | — | — | — | 0.3694 | 0.3568 |
 | synth7 | power saturation, 6 snapshots, N jumps + one ×6 | — | — | — | 0.1930 | 0.1909 |
+| synth8 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5 | — | — | — | 3.2039 | 0.5879 |
+| synth9 | power saturation, 4 snapshots, N jumps ×2–4 | — | — | — | 0.1856 | 0.1838 |
 | **mean 1–4** | | **0.5980** | **0.3834** | **0.3208** | **0.2705** | **0.2133** |
 | **mean 1–7** | | | | | **0.5341** | **0.2534** |
+| **mean 1–9** | | | | | **0.7920** | **0.2829** |
 
 Synth5–7 (generated for v5, after v4 was chosen, to stress the few-snapshot
 regime: 6–9 distinct snapshots instead of 9–30, refreshes 6–13 h apart,
@@ -120,3 +123,17 @@ argmin-SSE pick (much worse everywhere: synth5 2.09 → 3.62, synth6
 the median is not robust); stronger growth dampening when snapshots < 8
 (γ = 0.5 rescues synth5 to 0.40 alone, but hurts synth7 0.19 → 0.23 and
 adds nothing on top of the headroom cap, so it was left out).
+
+Boundary probe for v6 (synth8/9: only 3–4 distinct snapshots): v5 already
+rescues synth8 from v4's 3.20 to 0.59, but it stays the worst case
+(miss 18.7 pp, coverage 0.71) because with 3 points the truth is bimodal —
+22 trophies overshoot (median ~70 vs answer ~40) and 33 undershoot
+(median ≈ last rate vs answer 50–80) — so no median shift fixes both.
+Tried and rejected for v6: widening the spread ×1.5 when snapshots ≤ 4
+(synth8 0.59 → 0.58 and coverage 0.71 → 0.93, but synth9 0.18 → 0.26,
+net mean 1–9 worse 0.283 → 0.290); tightening the headroom cap to 0.4 when
+snapshots ≤ 4 (synth8 unchanged at 0.59); both together (same spread cost).
+The 3-snapshot regime is irreducibly uncertain on a late-rising truth;
+the next idea worth trying is per-trophy spread from family disagreement
+(when the four families disagree wildly at the target, widen that trophy's
+band only) rather than a blanket widening.
