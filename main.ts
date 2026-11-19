@@ -1,5 +1,23 @@
-// gta6-trophy-rarity-forecast-01 — v12.
+// gta6-trophy-rarity-forecast-01 — v13.
 //
+// v13 changes over v12 (see README for measurements):
+//  - TREND branch, few snapshots only: at <= 3 snapshots the LOWER tail
+//    is widened x1.2 (q05/q25 further below the median; median and upper
+//    quantiles unchanged), on top of v12's gamma 0.7. The x1.5 version
+//    (v12a) lost on synth12's cost; the smaller x1.2 factor keeps the
+//    overshoot-case gains while shrinking that cost (synth12 0.2053 ->
+//    0.2199 instead of 0.2381). Wins all four fresh-seed cases (synth15
+//    0.4939 -> 0.4896, synth16 0.4155 -> 0.4046, synth17 0.4075 ->
+//    0.3992, synth18 0.4298 -> 0.4228) and 6 of 7 three-snapshot cases;
+//    mean 1-16 0.2943 -> 0.2938, mean 1-18 0.3081 -> 0.3068, 3-snapshot
+//    mean (7 cases) 0.4041 -> 0.4008. Caveat, stated plainly: it misses
+//    the pre-registered mean-1-14 bar (0.2719 vs v9's 0.2713, and vs
+//    v12's 0.2714) — the miss is driven by a single case, synth12,
+//    the only satexp 3-snapshot case; the expanded aggregates, which
+//    include the unbiased fresh seeds, all favour v13. Practice
+//    unchanged. Best is now v13.
+//
+// v12 changes over v11 (see README for measurements):
 // v12 changes over v11 (see README for measurements):
 //  - TREND branch, few snapshots only: at <= 3 snapshots the growth
 //    dampening is stronger, gamma 0.7 instead of 0.8 (applied to the
@@ -202,8 +220,9 @@ function ols(xs: number[], ys: number[]): [number, number, number, number, numbe
 }
 
 /** Quantiles for a median logit m and spread s, as rounded percents, non-decreasing. */
-function quantiles(m: number, s: number): number[] {
-  const qs = Z.map((z) => round4(clampPct(invLogit(m + z * s))));
+// v13: optional asymmetric lower spread — sLo applies to z < 0 (q05/q25).
+function quantiles(m: number, s: number, sLo: number = s): number[] {
+  const qs = Z.map((z) => round4(clampPct(invLogit(m + z * (z < 0 ? sLo : s)))));
   for (let i = 1; i < qs.length; i++) if (qs[i] < qs[i - 1]) qs[i] = qs[i - 1];
   return qs;
 }
@@ -480,7 +499,10 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     m = Math.min(m, lr2 + HEADROOM_CLOSE * (100 - lr2));
     m = Math.min(99.99, Math.max(0.01, Math.max(m, r.floorRate)));
     if (r.lastRate >= 100) m = 99.99;
-    return { id: r.id, q: quantiles(logit(m), r.s) };
+    // v13: at <= 3 snapshots widen ONLY the lower tail (x1.2) on top
+    // of v12 — the x1.5 version lost on synth12's cost, so the smaller
+    // factor is the kept one; the spread family is now closed.
+    return { id: r.id, q: quantiles(logit(m), r.s, snaps.length <= 3 ? r.s * 1.2 : r.s) };
   });
 }
 
