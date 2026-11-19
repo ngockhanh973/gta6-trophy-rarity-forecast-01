@@ -24,20 +24,18 @@
 //     count over the enlarged player base, with a wide spread (1.0 logit)
 //     because the refresh size and timing are uncertain.
 //
-//  2. TREND history (3+ distinct snapshots, the final case). For each trophy
-//     fit a weighted least-squares line of logit(rate) against ln(1 + hours
-//     since release) over the distinct snapshots — the house curve baseline
-//     fits the same line but only over the last 24h and with no shrinkage.
-//     Here the slope is shrunk toward its tier's mean slope (bronze/silver/
-//     gold/platinum progress at different speeds, and a single trophy's
-//     slope is noisy), the intercept is refitted, and the line is read at
-//     the target. Two consistency guards use the player count: players
-//     tracked is forecast by the same log-time fit, and a trophy's implied
-//     earn count may never fall below its last observed count (counts only
-//     grow; a rate only falls because the player base grew), so the median
-//     is floored at lastCount / forecastN. The spread combines the
-//     baseline random walk (0.5 logit per sqrt-day), the fit's residual
-//     variance and the slope's extrapolation variance.
+//  2. TREND history (3+ distinct snapshots, the final case). Each trophy
+//     is fitted with a saturating growth curve in rate space,
+//     r(t) = c + R * (1 - exp(-(t / tau)^p)), with (tau, p) chosen by grid
+//     search and (c, R) by least squares: a straight line of logit(rate)
+//     against log-time extrapolates far too steeply because growth
+//     saturates. Two consistency guards use the player count: players
+//     tracked is forecast by a log-time fit, and a trophy's implied earn
+//     count may never fall below its last observed count (counts only grow;
+//     a rate only falls because the player base grew), so the median is
+//     floored at lastCount / forecastN. The spread combines the baseline
+//     random walk (0.5 logit per sqrt-day) and the fit's residual in logit
+//     space.
 //
 // Everything is deterministic (no randomness), stdlib only, offline.
 
