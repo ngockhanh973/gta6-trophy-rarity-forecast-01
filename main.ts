@@ -34,8 +34,14 @@ const Z = [-1.645, -0.674, 0, 0.674, 1.645];
 
 /** Release day began 2026-11-19T00:00:00Z; log-time is measured from here. */
 const RELEASE_MS = Date.parse('2026-11-19T00:00:00Z');
-/** Baseline random-walk spread, logit per square-root day. */
-const RW_SIGMA = 0.5;
+/** Baseline random-walk spread, logit per square-root day. v1/v2 used the
+    house baseline's 0.5; v3 lowers it to 0.3: on four synthetic finals of
+    four different truth families the 0.5 spread is ~2x wider than the
+    forecasts' actual logit error (90% coverage 0.98 even at 0.2), so the
+    extra width only pays pinball at every trophy. 0.3, not the synthetic
+    optimum (~0.2), keeps margin for the real final's unknown family and
+    refresh staleness, which noiseless synthetics cannot price. */
+const RW_SIGMA = 0.3;
 /** First-refresh player multiplier, as documented in the kit (638 -> 3,868). */
 const FIRST_REFRESH_MULT = 3868 / 638;
 /** Kit-published first-refresh aggregates: players 638 -> 3,868, trophies
