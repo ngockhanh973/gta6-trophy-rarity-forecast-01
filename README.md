@@ -526,6 +526,56 @@ often identical and a refresh arrives as one jump in `players_tracked`.
   the second decisively — further median-rule attempts need a new
   diagnostic signal, not another point on the trim/γ axes.
 
+- **Fresh-seed validation, round 9 (synth31/32, before v22).**
+  `gen_synth3132.py` in the work dir, not committed: synth31 delayed
+  logistic, seed 201, 3 snapshots; synth32 Gompertz late-rise, seed 211,
+  3 snapshots — both gave 3 distinct snapshots on the first seed tried
+  (seed chosen on the snapshot-count criterion only, before any loss was
+  measured, and before the v22 variant existed). v19 on them: synth31
+  0.3890 (miss 10.23 pp, cov 0.89), synth32 0.4372 (miss 11.30 pp,
+  cov 0.87) — pair mean 0.4131, between the earlier fresh pairs (23/24:
+  0.3594, 25/26: 0.4211, 27/28: 0.3819, 29/30: 0.4399). The 3-snapshot
+  verdict now rests on 21 cases; on all 32 cases v19 is mean 1–32 0.3404,
+  3-snapshot 21-case mean 0.3893.
+
+- **v22 idea 1 (REJECTED, diagnosed before building): rolling-origin
+  1-step family drop.** Web search for this round (sources in the work
+  dir's `diag22b.py` header notes): rolling-origin / time-series
+  cross-validation — Hyndman & Athanasopoulos, *Forecasting: Principles
+  and Practice* (3rd ed.) §5.10, https://millengustavo.github.io/hyndman-forecasting/ ;
+  conformalized quantile regression — Romano et al. 2019,
+  https://arxiv.org/pdf/1905.03222v1 ; jackknife+ — Barber et al. 2021,
+  https://rich-iannone.github.io/whittaker/user-guide/conformal.html ;
+  bagging — Breiman 1996, https://ankurtrapasiya.com/posts/bagging/ .
+  The idea picked from that search: v7 proved in-sample SSE cannot
+  separate right from wrong families at 3 points, so use the one honest
+  out-of-sample signal available — fit each family on snaps 1–2 and
+  predict snap 3 (rolling origin), then drop the family that overshoots
+  snap 3 most from the ≤ 3 pool. The diagnostic (`diag22b-main.ts` /
+  `diag22b.py`, 1,155 trophies × 5 families) kills it before any build:
+  a 2-point fit cannot identify these 3–4-parameter families, so the
+  1-step errors are degenerate (|e1| 2.5–5.6 logit, predictions at 0/100;
+  satexp/power ALWAYS under-predict snap 3) and the pooled correlation
+  with the target error is −0.54 — the WRONG sign. Argmax-e1 identifies
+  the worst target family in only 1% of trophies where max e1 > 0.
+  Exact counterfactual replay of v19's rule with one family dropped:
+  drop argmax e1 0.4022, drop argmax |e1| 0.3967, gated drops (> 0.3 /
+  > 0.5) 0.3998 / 0.3996, all vs v19's 0.3893 on the 21 3-snapshot
+  cases. The rolling-origin family is closed: with 3 snapshots there is
+  no honest per-family out-of-sample signal — 2 training points cannot
+  carry a 4-parameter curve. (CQR / jackknife+ spread and bagging were
+  the other candidates from the same search: both are spread/variance
+  ideas, and v10's lesson stands — the 3-snapshot gap is a median
+  problem, not a spread problem — so neither was built.)
+
+- **Floor / N-forecast axis (CLOSED by diagnostic, no build).**
+  Instrumented dump `diag22-main.ts` / `diag22.py`: the log-time OLS
+  forecasts nStar/lastN of only 1.08–1.97 (the ×10 cap never binds),
+  and the floor binds on 0/1,155 trophies at ≤ 3 snapshots — the floor
+  is dead weight in the few-snapshot regime, so no N-forecast change
+  can move the score there. The replay reproduces v19's 3-snapshot
+  21-case mean 0.3893 exactly, so the diagnostic is exact.
+
 - **v19: γ = 0.65 at exactly 3 snapshots (on top of v18).** The v12
   γ sweep (0.6 lost, 0.7 kept) was measured on the pre-v16/v18 base, so
   the knob was re-probed on the new base: γ = 0.65 only at 3 snapshots
