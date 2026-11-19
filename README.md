@@ -415,6 +415,42 @@ often identical and a refresh arrives as one jump in `players_tracked`.
   v18 (0.3902 → 0.3836). Same promotion logic as v11/v13/v16. Practice
   unchanged. **Best is now v18.**
 
+- **v20 (REJECTED, docs only): family-aware rescue — diagnosed, not
+  built.** The v19 round's second idea, diagnosed BEFORE any variant
+  was built (instrumented dump `diag20-main.ts`, analysis `diag20.py`
+  in the work dir; the dump reproduces v19's measured case losses on
+  all 17 three-snapshot cases to 4 decimals, 0 mismatches, so the
+  diagnostic is exact, not an approximation). The family signals DO
+  separate per trophy, inside the rescue population (stdLogit ≥ 0.8,
+  88/935 trophies, 9.4%): pick==gompertz mean gain −0.3582 (mid3-win
+  0.81) vs pick==delayed −0.0049 (0.56); delayed-rank ≥ 3 −0.4426
+  (0.85) vs ≤ 1 +0.0233 (0.55); gompertz-rank ≥ 3 −0.39/−0.95
+  (mid3-win 1.00) vs ≤ 1 ~+0.01. But NO rule built from them beats
+  v19 (3-snap17 0.3806, 3-snap9 0.3739) on both gates: gating the
+  rescue on pick late-rise (0.3809/0.3745), pick NOT delayed
+  (0.3808/0.3781), pick==gompertz (0.3812/0.3787), drank ≤ 1
+  (0.3967/0.3942) all lose; drank ≥ 3 gating wins 3-snap17
+  (0.3792) but loses 3-snap9 (0.3746); extending the rescue
+  (std ≥ 0.8 OR drank ≥ 3: 0.3819/0.3745; OR pick==gompertz:
+  0.3871/0.3817) also loses. The best-looking rule, std ≥ 0.8 OR
+  grank ≥ 3 (0.3800/0.3738), wins by 0.0006/0.0001 — pure noise on
+  22 added trophies, a post-hoc threshold, NOT built. Two structural
+  reasons the idea has nothing to grab: (1) the case-level delayed
+  cost is a 3-trophy effect — delayed-truth cases have only 3 rescue
+  trophies in total (synth10: 1, synth25: 2; the other six delayed
+  cases have 0), while Gompertz cases have 2–20 — the std ≥ 0.8 rule
+  ALREADY separates the truth families at case level, so a family
+  gate has almost nothing left to do; (2) the separation is not a
+  sign flip into "rescue loses" except marginally (drank ≤ 1: +0.023)
+  — mid3 still wins or ties in nearly every subgroup, so gating can
+  only shave the rescue's wins. Mechanism note: a HIGH delayed rank
+  means the delayed family itself extrapolates high — the pool's high
+  end is late-rise shaped, not a blow-up — the same phenomenon v18
+  found from the dispersion angle (low families absurdly low at
+  extreme dispersion). No code change; best stays v19. The
+  family-aware family is now closed alongside spread, γ, SSE,
+  logit-averaging and Winsorize.
+
 - **Fresh-seed validation, round 7 (synth27/28, before v19).**
   `gen_synth2728.py` in the work dir, not committed: synth27 delayed
   logistic, seed 161, 3 snapshots; synth28 Gompertz late-rise, seed 172,
@@ -662,23 +698,22 @@ do not re-sweep any of the three):
 1. *SSE-weighted trimmed mean at ≤ 3 snapshots* — TRIED as v14 and
    REJECTED (all three weight forms lose on both gates; see v14
    above). The SSE family is closed.
-2. *v19 outcome — γ by snapshot count, DONE and PROMOTED:* γ = 0.65
-   only at 3 snapshots wins both gates (mean 1–20 0.3045 → 0.3041,
-   3-snap9 0.3748 → 0.3739) with fresh-seed support (27/28 win, all
-   six fresh seeds 23–28 win 0.3831 → 0.3804); γ = 0.6 wins the gates
-   by more but loses on fresh pair 25/26 and the expanded aggregates,
-   so 0.65 is the kept point and the γ family is closed a second time.
-   Next median candidate for v20 (one variant at a time, same two
-   gates): a *family-aware rescue* — v19 still costs on Gompertz truth
-   at 3 snapshots (8 cases 0.3752 → 0.3795) while helping
-   delayed-logistic (0.4037 → 0.3980), and v18's mid3 fallback costs
-   on delayed-logistic (s10 +0.0095, s25 +0.0162) while winning big
-   on Gompertz — DIAGNOSE BEFORE BUILDING: check whether the picked
-   family's identity (or the delayed-logistic family's own median)
-   separates the rescue wins from the rescue losses; if it does not
-   separate, do not build blind, record the diagnosis and stop that
-   idea. Deadline 21/11 18:30 — one variant at a time, no parallel
-   tuning.
+2. *v20 outcome — family-aware rescue, DIAGNOSED and REJECTED (docs
+   only):* the picked family's identity and the delayed/gompertz
+   ranks DO separate rescue wins from losses per trophy (pick==
+   gompertz −0.36 vs pick==delayed −0.005; drank ≥ 3 −0.44 vs ≤ 1
+   +0.02), but no rule built from them beats v19 on both gates — the
+   std ≥ 0.8 rule already separates the truth families at case level
+   (delayed cases have 0–2 rescue trophies, Gompertz 2–20), and the
+   best-looking rule (extend rescue to grank ≥ 3) wins by 0.0006/
+   0.0001, pure noise on 22 trophies. The family-aware family is
+   closed. Next for v21 (one variant at a time, same two gates):
+   generate two more fresh 3-snapshot seeds (29/30) FIRST as arbiter,
+   then try a genuinely different median rule — the current family is
+   at its ceiling (v19→v20 moved nothing), and the only sub-noise lead
+   left (grank ≥ 3 extension) must be confirmed on fresh seeds before
+   any build. Deadline 21/11 18:30 — one variant at a time, no
+   parallel tuning.
 3. *More fresh 3-snapshot seeds before any further scope change* —
    the 3-snapshot verdict now rests on 17 cases (synth27/28 added for
    v19, seeds 161/172). Two more seeds would firm up a v20 decision
