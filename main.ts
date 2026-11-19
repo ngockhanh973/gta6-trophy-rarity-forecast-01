@@ -1,41 +1,24 @@
-// gta6-trophy-rarity-forecast-01 — v1.
+// gta6-trophy-rarity-forecast-01 — v2.
 //
 // Forecast each GTA VI trophy's Exophase earn rate at the case target as five
 // quantiles (5/25/50/75/95%), scored by pinball loss on the logit scale.
 //
-// Model (per trophy, all in logit space, logit(p) = ln(p / (100 - p))):
-//
-// The page the house reads is NOT live: Exophase refreshes a game's counts on
-// its own schedule, hours apart, so consecutive reads are often byte-identical
-// and a refresh shows up as one jump in players_tracked with every rate
-// moving at once. The forecast therefore has two branches:
-//
-//  1. FLAT history (fewer than 3 distinct snapshots, e.g. the practice
-//     cases: every read identical). No trend can be fitted, so the model
-//     reasons about the next refresh instead. The page has been frozen since
-//     the first read; when the freeze is older than a refresh cadence and the
-//     horizon reaches past it, a refresh is expected before the target.
-//     At a refresh the tracked-player count jumps (the kit documents the
-//     first one: 638 -> 3,868, x6.06) and the newly tracked players have
-//     barely played, so they hold almost nothing except the trivial
-//     first-minute trophy: a new cohort's earn probability for a trophy is
-//     modelled as the square of its current rate (100% stays 100%, a 1%
-//     trophy is ~0.01% for newcomers). The median rate is then the pooled
-//     count over the enlarged player base, with a wide spread (1.0 logit)
-//     because the refresh size and timing are uncertain.
-//
-//  2. TREND history (3+ distinct snapshots, the final case). Each trophy
-//     is fitted with a saturating growth curve in rate space,
-//     r(t) = c + R * (1 - exp(-(t / tau)^p)), with (tau, p) chosen by grid
-//     search and (c, R) by least squares: a straight line of logit(rate)
-//     against log-time extrapolates far too steeply because growth
-//     saturates. Two consistency guards use the player count: players
-//     tracked is forecast by a log-time fit, and a trophy's implied earn
-//     count may never fall below its last observed count (counts only grow;
-//     a rate only falls because the player base grew), so the median is
-//     floored at lastCount / forecastN. The spread combines the baseline
-//     random walk (0.5 logit per sqrt-day) and the fit's residual in logit
-//     space.
+// v2 changes over v1 (see README for measurements):
+//  - FLAT branch: the new cohort's earn probability is a tier/secret-weighted
+//    power law of the trophy's current rate, pNew ~ w * r^1.25, calibrated so
+//    the cohort's total new earns match the kit-published first-refresh
+//    aggregates (earned 943 -> 4,276; the 100% trophy accounts for all of the
+//    new cohort's earns of it). v1's squared law predicted only ~17 new earns
+//    against the published 3,333. Spread narrowed 1.0 -> 0.5 logit (the
+//    remaining uncertainty is per-trophy Poisson/small-number noise plus the
+//    tier prior, not the refresh itself, whose size the kit documents).
+//  - TREND branch: each trophy is fitted with FOUR saturating families
+//    (saturating exponential as in v1, logistic in log-time, Gompertz,
+//    power saturation) and the family with the lowest in-sample squared
+//    error in rate space is used for that trophy. Growth speed is therefore
+//    estimated per trophy, and the forecast no longer bets everything on
+//    one curve family. A straight logit-vs-log-time line is still excluded:
+//    it extrapolates far too steeply because growth saturates.
 //
 // Everything is deterministic (no randomness), stdlib only, offline.
 
@@ -55,12 +38,33 @@ const RELEASE_MS = Date.parse('2026-11-19T00:00:00Z');
 const RW_SIGMA = 0.5;
 /** First-refresh player multiplier, as documented in the kit (638 -> 3,868). */
 const FIRST_REFRESH_MULT = 3868 / 638;
-/** Refresh cadence in hours implied by the launch-night freeze (~4.7h). */
-/** Spread (logit) of the flat-branch forecast: refresh size/timing unknown. */
-const FLAT_SPREAD = 1.0;
+/** Kit-published first-refresh aggregates: players 638 -> 3,868, trophies
+    earned 943 -> 4,276. The new cohort therefore earned 4,276 - 943 = 3,333
+    trophy instances; every trophy already at 100% accounts for one earn per
+    new player, the rest is the budget the power law below is calibrated to. */
+const FIRST_REFRESH_N = 3868;
+const FIRST_REFRESH_EARNED = 4276;
+/** Power-law exponent for the new cohort's earn probability: a new player's
+    hours played are a shrunk version of an old player's, so (for exponential
+    hours) pNew ~ r^alpha with alpha = mean-hours ratio; the trophies-per-
+    player ratio 943/638 vs (4276-943)/3230 ~ 1.43 points to alpha ~ 1.25-1.5. */
+const NEW_COHORT_ALPHA = 1.25;
+/** Tier/secret prior on the new cohort's earn probability (mild: a factor
+    ~4 from platinum to early-story secret bronze). New players in their
+    first hours can reach early story chapters but not grinds, the final
+    mission, or the platinum. Calibrated as a group, never fitted to the
+    (unpublished) per-trophy practice answers. */
+const TIER_WEIGHT: Record<string, number> = {
+  platinum: 0.3, gold: 0.6, silver: 0.8, bronze: 1.0,
+};
+const SECRET_BRONZE_WEIGHT = 1.2;
+/** Spread (logit) of the flat-branch forecast: refresh size is documented,
+    so the remaining uncertainty is per-trophy small-number noise plus the
+    tier prior. */
+const FLAT_SPREAD = 0.5;
 
 interface Trophy { id: number; tier: string; }
-interface Read { at: string; players_tracked: number; rates: Array<number | null>; }
+interface Read { at: string; players_tracked: number; trophies_earned?: number; rates: Array<number | null>; }
 interface Case {
   id: string; at: string; horizon_minutes: number; target: string;
   trophies: Trophy[]; history: Read[];
@@ -126,12 +130,37 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     const refreshExpected = frozenH >= 3;
     const nStar = refreshExpected ? lastN * FIRST_REFRESH_MULT : lastN;
     const dN = Math.max(0, nStar - lastN);
+    // Calibrate the new cohort's earn law to the kit-published aggregates:
+    // pNew_j = scale * w_j * (r_j/100)^alpha (as a fraction), with scale
+    // solved so the cohort's new earns over the non-100% trophies equal the
+    // published budget (earned 4,276 minus the old 943, minus one earn per
+    // new player for each trophy already at 100%).
+    let scale = 0;
+    if (refreshExpected && dN > 0) {
+      const oldEarned = last.trophies_earned ??
+        c.trophies.reduce((s, _t, i) => s + ((last.rates[i] ?? 0) / 100) * lastN, 0);
+      const nFull = c.trophies.reduce((s, _t, i) => s + ((last.rates[i] ?? 0) >= 100 ? 1 : 0), 0);
+      const budget = FIRST_REFRESH_EARNED - oldEarned - nFull * dN;
+      let denom = 0;
+      for (let i = 0; i < nT; i++) {
+        const r = last.rates[i] ?? 0;
+        if (r >= 100) continue;
+        const w = c.trophies[i].tier === 'bronze' && c.trophies[i].secret
+          ? SECRET_BRONZE_WEIGHT : (TIER_WEIGHT[c.trophies[i].tier] ?? 1.0);
+        denom += w * Math.pow(r / 100, NEW_COHORT_ALPHA) * dN;
+      }
+      scale = budget > 0 && denom > 0 ? budget / denom : 0;
+    }
     return c.trophies.map((t, i) => {
       const r = last.rates[i] ?? 0;
       if (r >= 100) return { id: t.id, q: quantiles(logit(100), 0.05) };
-      // New cohort's earn probability ~ rate squared (percent units):
-      // the trivial trophy stays ~100% for newcomers, hard ones ~0.
-      const pNew = (r * r) / 100;
+      const w = t.tier === 'bronze' && t.secret
+        ? SECRET_BRONZE_WEIGHT : (TIER_WEIGHT[t.tier] ?? 1.0);
+      // New cohort's earn probability (percent): scale * w * r^alpha, with
+      // r in percent units — a 1% trophy's newcomers earn it at ~0.07%,
+      // not ~0.01% as v1's squared law had it (which implied ~17 new earns
+      // in total against the published 3,333).
+      const pNew = scale * w * Math.pow(r / 100, NEW_COHORT_ALPHA) * 100;
       const count = (r / 100) * lastN + (pNew / 100) * dN;
       const med = (count / nStar) * 100;
       const spread = refreshExpected ? FLAT_SPREAD : RW_SIGMA * Math.sqrt(horizonDays);
@@ -139,14 +168,23 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     });
   }
 
-  // ---- Branch 2: trend history — saturating growth curve per trophy. ----
+  // ---- Branch 2: trend history — one saturating family per trophy. ----
   // A straight line of logit(rate) against log-time extrapolates far too
   // steeply (early growth is fast, late growth flattens as trophies
   // saturate), so each trophy is fitted with a saturating curve in rate
-  // space instead: r(t) = c + R * (1 - exp(-(t / tau)^p)), with (tau, p)
-  // chosen by grid search and (c, R) by least squares at each grid point.
-  // c absorbs the rate already present at the first read (players had the
-  // game before the release day began); R is the trophy's ceiling.
+  // space. v1 bet everything on one family (saturating exponential); v2
+  // fits four and keeps, per trophy, the one with the lowest in-sample
+  // squared error in rate space, so each trophy's growth speed and shape
+  // are estimated from its own history and a wrong family cannot drag
+  // every trophy with it:
+  //   satexp:   r = c + R*(1 - exp(-(t/tau)^p))      (v1's family)
+  //   logistic: r = A / (1 + exp(-k*(ln(1+t) - x0)))
+  //   gompertz: r = A * exp(-exp(-k*(t - t0)))
+  //   power:    r = A * (t/(t+tau))^p
+  // Each family's scale (c,R / A) is solved by least squares at fixed shape
+  // parameters, which are grid-searched. Selection by rate-space SSE: a
+  // logit-space SSE was tried and rejected — it is dominated by the near-
+  // zero early rates and picks the wrong family on Gompertz truth.
   const ts = snaps.map((s) => hoursSinceRelease(s.at));
   // Forecast players tracked by a log-time fit (power-law growth).
   const xsN = snaps.map((s) => Math.log1p(hoursSinceRelease(s.at)));
@@ -154,56 +192,110 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
   let nStar = Math.exp(nFit[0] + nFit[1] * xStar);
   nStar = Math.min(Math.max(nStar, lastN), lastN * 10);
 
-  // Grid over timescale tau (hours) and shape p.
-  const taus: number[] = [];
-  for (let k = 0; k < 48; k++) taus.push(0.5 * Math.pow(4000, k / 47));
-  const shapes = [0.7, 1, 1.5];
+  /** Least squares for r = A*g at fixed g, with A >= 0; returns [A, sse]. */
+  const fitScale = (g: number[], rs: number[]): [number, number] => {
+    let ss = 0, sgr = 0;
+    for (let j = 0; j < g.length; j++) { ss += g[j] * g[j]; sgr += g[j] * rs[j]; }
+    const a = ss > 1e-12 ? Math.max(0, sgr / ss) : 0;
+    let sse = 0;
+    for (let j = 0; j < g.length; j++) { const d = rs[j] - a * g[j]; sse += d * d; }
+    return [a, sse];
+  };
 
   return c.trophies.map((t, i) => {
     const rs = snaps.map((s) => s.rates[i] ?? 0);
-    // Least squares for r = c + R*g at fixed g, with c, R >= 0.
-    const fitCR = (g: number[]): [number, number, number] => {
-      let sg = 0, sgg = 0, sr = 0, sgr = 0;
-      const n = g.length;
-      for (let j = 0; j < n; j++) {
-        sg += g[j]; sgg += g[j] * g[j]; sr += rs[j]; sgr += g[j] * rs[j];
+    // Candidate fits: [medianAtTarget, sse, predictAt(t)].
+    const cands: Array<[number, number, (tj: number) => number]> = [];
+    // 1. Saturating exponential (v1): r = c + R*g, LS for c, R >= 0.
+    {
+      const taus: number[] = [];
+      for (let k = 0; k < 48; k++) taus.push(0.5 * Math.pow(4000, k / 47));
+      let best: [number, number, number, number, number] | null = null;
+      for (const tau of taus) {
+        for (const p of [0.7, 1, 1.5]) {
+          const g = ts.map((tj) => 1 - Math.exp(-((tj / tau) ** p)));
+          let sg = 0, sgg = 0, sr = 0, sgr = 0;
+          const n = g.length;
+          for (let j = 0; j < n; j++) {
+            sg += g[j]; sgg += g[j] * g[j]; sr += rs[j]; sgr += g[j] * rs[j];
+          }
+          const det = n * sgg - sg * sg;
+          let cc = sr / n, rr = 0;
+          if (Math.abs(det) > 1e-12) {
+            rr = (n * sgr - sg * sr) / det;
+            cc = (sr - rr * sg) / n;
+          }
+          if (rr < 0) { rr = 0; cc = sr / n; }
+          if (cc < 0) cc = 0;
+          let sse = 0;
+          for (let j = 0; j < n; j++) {
+            const d = rs[j] - (cc + rr * g[j]);
+            sse += d * d;
+          }
+          if (best === null || sse < best[2]) best = [cc, rr, sse, tau, p];
+        }
       }
-      const det = n * sgg - sg * sg;
-      let cc = sr / n, rr = 0;
-      if (Math.abs(det) > 1e-12) {
-        rr = (n * sgr - sg * sr) / det;
-        cc = (sr - rr * sg) / n;
-      }
-      if (rr < 0) { rr = 0; cc = sr / n; }
-      if (cc < 0) cc = 0;
-      let sse = 0;
-      for (let j = 0; j < n; j++) {
-        const d = rs[j] - (cc + rr * g[j]);
-        sse += d * d;
-      }
-      return [cc, rr, sse];
-    };
-    let best: [number, number, number, number, number] | null = null; // c,R,sse,tau,p
-    for (const tau of taus) {
-      for (const p of shapes) {
-        const g = ts.map((tj) => 1 - Math.exp(-((tj / tau) ** p)));
-        const [cc, rr, sse] = fitCR(g);
-        if (best === null || sse < best[2]) best = [cc, rr, sse, tau, p];
-      }
+      const [cc, rr, sse, tau, p] = best as [number, number, number, number, number];
+      cands.push([cc + rr * (1 - Math.exp(-((targetH / tau) ** p))), sse,
+        (tj) => cc + rr * (1 - Math.exp(-((tj / tau) ** p)))]);
     }
-    const [cc, rr, , tau, p] = best as [number, number, number, number, number];
-    const gStar = 1 - Math.exp(-((targetH / tau) ** p));
-    let med = cc + rr * gStar;
+    // 2. Logistic in log-time.
+    {
+      let best: [number, number, number, number] | null = null; // A,sse,k,x0
+      for (const k of [0.5, 1, 1.5, 2, 3]) {
+        for (const v of [2, 6, 12, 24, 48, 96, 168]) {
+          const x0 = Math.log1p(v);
+          const g = ts.map((tj) => 1 / (1 + Math.exp(-k * (Math.log1p(tj) - x0))));
+          const [a, sse] = fitScale(g, rs);
+          if (best === null || sse < best[1]) best = [a, sse, k, x0];
+        }
+      }
+      const [a, sse, k, x0] = best as [number, number, number, number];
+      cands.push([a / (1 + Math.exp(-k * (Math.log1p(targetH) - x0))), sse,
+        (tj) => a / (1 + Math.exp(-k * (Math.log1p(tj) - x0)))]);
+    }
+    // 3. Gompertz in linear time.
+    {
+      let best: [number, number, number, number] | null = null; // A,sse,k,t0
+      for (const k of [0.02, 0.04, 0.08, 0.15, 0.3]) {
+        for (const t0 of [0, 6, 12, 24, 48, 96]) {
+          const g = ts.map((tj) => Math.exp(-Math.exp(-k * (tj - t0))));
+          const [a, sse] = fitScale(g, rs);
+          if (best === null || sse < best[1]) best = [a, sse, k, t0];
+        }
+      }
+      const [a, sse, k, t0] = best as [number, number, number, number];
+      cands.push([a * Math.exp(-Math.exp(-k * (targetH - t0))), sse,
+        (tj) => a * Math.exp(-Math.exp(-k * (tj - t0)))]);
+    }
+    // 4. Power saturation.
+    {
+      let best: [number, number, number, number] | null = null; // A,sse,tau,p
+      for (const tau of [2, 6, 12, 24, 48, 96, 200, 400]) {
+        for (const p of [0.5, 0.8, 1, 1.5, 2]) {
+          const g = ts.map((tj) => (tj > 0 ? (tj / (tj + tau)) ** p : 0));
+          const [a, sse] = fitScale(g, rs);
+          if (best === null || sse < best[1]) best = [a, sse, tau, p];
+        }
+      }
+      const [a, sse, tau, p] = best as [number, number, number, number];
+      cands.push([a * ((targetH / (targetH + tau)) ** p), sse,
+        (tj) => (tj > 0 ? a * ((tj / (tj + tau)) ** p) : 0)]);
+    }
+    // Lowest in-sample SSE wins; ties keep the earliest family (satexp).
+    let pick = cands[0];
+    for (const cand of cands) if (cand[1] < pick[1]) pick = cand;
+    let med = pick[0];
     // Counts never fall: floor the median at lastCount / forecastN.
     const lastRate = last.rates[i] ?? 0;
     const floorRate = ((lastRate / 100) * lastN) / nStar * 100;
     med = Math.min(99.99, Math.max(0.01, Math.max(med, floorRate)));
     if (lastRate >= 100) med = 99.99;
-    // Spread: random walk + residual std in logit space around the curve.
+    // Spread: random walk + residual std in logit space around the picked
+    // family's curve.
     let se = 0;
     for (let j = 0; j < ts.length; j++) {
-      const pred = cc + rr * (1 - Math.exp(-((ts[j] / tau) ** p)));
-      const d = logit(rs[j]) - logit(pred);
+      const d = logit(rs[j]) - logit(pick[2](ts[j]));
       se += d * d;
     }
     const resid = Math.sqrt(se / ts.length);
