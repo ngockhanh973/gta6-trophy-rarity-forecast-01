@@ -1,5 +1,33 @@
-// gta6-trophy-rarity-forecast-01 — v16.
+// gta6-trophy-rarity-forecast-01 — v18.
 //
+// v18 changes over v16 (v17 was a rejected attempt, see README):
+//  - TREND branch, few snapshots only: ADAPTIVE trim by pool spread.
+//    The diagnostic (diag18.py/diag18b.py in the work dir) found the
+//    hypothesised direction BACKWARDS: low3 wins on MODERATE pool
+//    dispersion (range-decile mean gain rises +0.004 -> +0.077 up to
+//    range ~2 logit) and loses catastrophically only at EXTREME
+//    dispersion (top decile, range 2.01-5.70 logit: mean gain -0.137,
+//    win share 0.38 — there the LOW families are absurdly low, not the
+//    high ones blown up). So the median stays v16's lowest-3 UNLESS the
+//    five transformed medians' logit std is >= 0.8 (~10% of trophies),
+//    where the middle-three trimmed mean (v13's rule) is used instead.
+//    The hypothesised rule (low3 iff wide, mid3 iff tight) is noise:
+//    0.3914 vs always-low3 0.3920 on the 13-case mean. Wins BOTH gates
+//    vs v16: mean 1-20 0.3128 -> 0.3045, 3-snapshot mean (9 cases)
+//    0.3932 -> 0.3748; practice unchanged 0.1066. It rescues exactly
+//    the cases v16 loses — synth8 0.4041 -> 0.3536, synth16 0.4346 ->
+//    0.3598, synth18 0.4473 -> 0.3950, synth22 0.4570 -> 0.4238 — at a
+//    small cost on synth10 (+0.0095), synth24 (+0.0072), synth20
+//    (+0.0026). Caveat, stated plainly: on the fresh pair 23/24 it
+//    loses slightly (0.3594 -> 0.3630), but on the fresh pair 25/26,
+//    generated before v18 was built, it wins (0.4211 -> 0.4043), so
+//    all four fresh seeds favour v18 (0.3902 -> 0.3836). Same promotion
+//    logic as v11/v13/v16. The threshold is flat: std 0.7-1.25 gives
+//    3-snap13 0.377-0.381, and all four dispersion measures (range/iqr/
+//    std/topGap, inverted) improve, so 0.8 is not a tuned point.
+//    Practice unchanged. Best is now v18.
+//
+// v16 changes over v13 (v15 was a rejected attempt, see README):
 // v16 changes over v13 (v15 was a rejected attempt, see README):
 //  - TREND branch, few snapshots only: at <= 3 snapshots the median is the
 //    mean of the LOWEST three of the five families' transformed target
@@ -501,7 +529,22 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     // v16: asymmetric top-only trim — average the LOWEST three
     // transformed medians (meds5[0..2]), dropping the two highest families
     // outright, so the early-rising blow-up family cannot drag the median.
-    const medFew = (meds5[0] + meds5[1] + meds5[2]) / 3;
+    // v18: adaptive trim by pool spread — the diagnostic
+    // (diag18.py/diag18b.py) found the hypothesised direction BACKWARDS:
+    // low3 wins on MODERATE dispersion (range-decile mean gain rises
+    // +0.004 -> +0.077 up to range ~2 logit) and loses catastrophically
+    // only at EXTREME dispersion (top decile range 2.01-5.70: mean gain
+    // -0.137, win share 0.38 — there the LOW families are absurdly low,
+    // not the high ones blown up). So: keep low3 unless the pool's logit
+    // std is extreme (>= 0.8, ~10% of trophies), where the middle-three
+    // trimmed mean rescues. The hypothesised rule (low3 iff wide) is
+    // noise: 0.3914 vs always-low3 0.3920 on the 13-case mean.
+    const medsLogit = meds5.map((m) => logit(m));
+    const meanLogit = medsLogit.reduce((s, v) => s + v, 0) / medsLogit.length;
+    const stdLogit = Math.sqrt(medsLogit.reduce((s, v) => s + (v - meanLogit) ** 2, 0) / medsLogit.length);
+    const medFew = stdLogit >= 0.8
+      ? (meds5[1] + meds5[2] + meds5[3]) / 3
+      : (meds5[0] + meds5[1] + meds5[2]) / 3;
     return { id: t.id, q: quantiles(logit(med), s), med, s, lastRate, floorRate, tier: t.tier, asym: pick[3], medFew };
   });
   // v5: tier-asymptote shrinkage. A single trophy's fitted asymptote is
