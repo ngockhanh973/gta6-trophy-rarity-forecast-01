@@ -1,24 +1,23 @@
-// gta6-trophy-rarity-forecast-01 — v2.
+// gta6-trophy-rarity-forecast-01 — v5.
 //
 // Forecast each GTA VI trophy's Exophase earn rate at the case target as five
 // quantiles (5/25/50/75/95%), scored by pinball loss on the logit scale.
 //
-// v2 changes over v1 (see README for measurements):
-//  - FLAT branch: the new cohort's earn probability is a tier/secret-weighted
-//    power law of the trophy's current rate, pNew ~ w * r^1.25, calibrated so
-//    the cohort's total new earns match the kit-published first-refresh
-//    aggregates (earned 943 -> 4,276; the 100% trophy accounts for all of the
-//    new cohort's earns of it). v1's squared law predicted only ~17 new earns
-//    against the published 3,333. Spread narrowed 1.0 -> 0.5 logit (the
-//    remaining uncertainty is per-trophy Poisson/small-number noise plus the
-//    tier prior, not the refresh itself, whose size the kit documents).
-//  - TREND branch: each trophy is fitted with FOUR saturating families
-//    (saturating exponential as in v1, logistic in log-time, Gompertz,
-//    power saturation) and the family with the lowest in-sample squared
-//    error in rate space is used for that trophy. Growth speed is therefore
-//    estimated per trophy, and the forecast no longer bets everything on
-//    one curve family. A straight logit-vs-log-time line is still excluded:
-//    it extrapolates far too steeply because growth saturates.
+// v5 changes over v4 (see README for measurements):
+//  - TREND branch: the fitted median may close at most 60% of the gap from
+//    the last rate to 100% (HEADROOM_CLOSE). With few snapshots, or on
+//    late-rising truth, a fitted saturating curve can blow up to ~100% while
+//    the truth is near 50%; the cap binds almost never on the synthetic
+//    truths (their closure ratios top out at 0.67, p95 <= 0.54) and the
+//    result is flat for k in 0.5-0.7, so 0.6 is a prior, not a tuned point.
+//  - TREND branch: the fitted asymptote is shrunk 25% toward the median
+//    fitted asymptote of its tier (TIER_SHRINK_OWN = 0.75), and the growth
+//    above the last rate is rescaled by A'/A. A single trophy's asymptote
+//    is barely identified from a handful of snapshots; its tier-mates pin
+//    down the plausible range.
+//  - TREND branch: the spread gains a binomial-count term, 4/earnCount in
+//    quadrature (earnCount = last earn count): rare trophies are noisier in
+//    logit space, common ones are not.
 //
 // Everything is deterministic (no randomness), stdlib only, offline.
 
@@ -69,6 +68,18 @@ const SECRET_BRONZE_WEIGHT = 1.2;
     out systematically overshoots on late-rising truth. Flat across
     gamma 0.7-0.85 on four synthetic families, so 0.8 is not a tuned point. */
 const GROWTH_DAMPEN = 0.8;
+/** Headroom cap (v5): the fitted median may close at most this share of the
+    gap from the last rate to 100% over the horizon. See the header comment:
+    synthetic truths close at most 0.67 of the gap (p95 <= 0.54), and the
+    result is flat for 0.5-0.7. */
+const HEADROOM_CLOSE = 0.6;
+/** Tier-asymptote shrinkage (v5): weight on a trophy's own fitted asymptote
+    when pulling it toward its tier's median fitted asymptote. */
+const TIER_SHRINK_OWN = 0.75;
+/** Binomial-count spread (v5): numerator of the 1/earnCount variance term
+    added to the spread in quadrature; rare trophies are noisier in logit
+    space. */
+const BINOM_SPREAD_NUM = 4;
 /** Spread (logit) of the flat-branch forecast: refresh size is documented,
     so the remaining uncertainty is per-trophy small-number noise plus the
     tier prior. */
@@ -213,10 +224,10 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     return [a, sse];
   };
 
-  return c.trophies.map((t, i) => {
+  const rows = c.trophies.map((t, i) => {
     const rs = snaps.map((s) => s.rates[i] ?? 0);
-    // Candidate fits: [medianAtTarget, sse, predictAt(t)].
-    const cands: Array<[number, number, (tj: number) => number]> = [];
+    // Candidate fits: [medianAtTarget, sse, predictAt(t), asymptote].
+    const cands: Array<[number, number, (tj: number) => number, number]> = [];
     // 1. Saturating exponential (v1): r = c + R*g, LS for c, R >= 0.
     {
       const taus: number[] = [];
@@ -248,7 +259,7 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
       }
       const [cc, rr, sse, tau, p] = best as [number, number, number, number, number];
       cands.push([cc + rr * (1 - Math.exp(-((targetH / tau) ** p))), sse,
-        (tj) => cc + rr * (1 - Math.exp(-((tj / tau) ** p)))]);
+        (tj) => cc + rr * (1 - Math.exp(-((tj / tau) ** p))), cc + rr]);
     }
     // 2. Logistic in log-time.
     {
@@ -263,7 +274,7 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
       }
       const [a, sse, k, x0] = best as [number, number, number, number];
       cands.push([a / (1 + Math.exp(-k * (Math.log1p(targetH) - x0))), sse,
-        (tj) => a / (1 + Math.exp(-k * (Math.log1p(tj) - x0)))]);
+        (tj) => a / (1 + Math.exp(-k * (Math.log1p(tj) - x0))), a]);
     }
     // 3. Gompertz in linear time.
     {
@@ -277,7 +288,7 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
       }
       const [a, sse, k, t0] = best as [number, number, number, number];
       cands.push([a * Math.exp(-Math.exp(-k * (targetH - t0))), sse,
-        (tj) => a * Math.exp(-Math.exp(-k * (tj - t0)))]);
+        (tj) => a * Math.exp(-Math.exp(-k * (tj - t0))), a]);
     }
     // 4. Power saturation.
     {
@@ -291,7 +302,7 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
       }
       const [a, sse, tau, p] = best as [number, number, number, number];
       cands.push([a * ((targetH / (targetH + tau)) ** p), sse,
-        (tj) => (tj > 0 ? a * ((tj / (tj + tau)) ** p) : 0)]);
+        (tj) => (tj > 0 ? a * ((tj / (tj + tau)) ** p) : 0), a]);
     }
     // Lowest in-sample SSE wins; ties keep the earliest family (satexp).
     let pick = cands[0];
@@ -303,6 +314,8 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     // v4: shrink the fitted growth over the last rate toward no growth.
     const lr = Math.max(lastRate, 0.01);
     if (med > lr) med = lr * Math.pow(med / lr, GROWTH_DAMPEN);
+    // v5: close at most 60% of the remaining headroom to 100%.
+    med = Math.min(med, lr + HEADROOM_CLOSE * (100 - lr));
     med = Math.min(99.99, Math.max(0.01, Math.max(med, floorRate)));
     if (lastRate >= 100) med = 99.99;
     // Spread: random walk + residual std in logit space around the picked
@@ -313,9 +326,38 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
       se += d * d;
     }
     const resid = Math.sqrt(se / ts.length);
+    // v5: binomial-count term — a trophy earned by few players is noisier
+    // in logit space (variance ~ 1/earnCount).
+    const earnCount = Math.max(1, (lastRate / 100) * lastN);
     const s = Math.min(1.5, Math.max(0.55,
-      Math.sqrt((RW_SIGMA * Math.sqrt(horizonDays)) ** 2 + Math.max(resid, 0.15) ** 2 + 0.15 ** 2)));
-    return { id: t.id, q: quantiles(logit(med), s) };
+      Math.sqrt((RW_SIGMA * Math.sqrt(horizonDays)) ** 2 + Math.max(resid, 0.15) ** 2 + 0.15 ** 2 + BINOM_SPREAD_NUM / earnCount)));
+    return { id: t.id, q: quantiles(logit(med), s), med, s, lastRate, floorRate, tier: t.tier, asym: pick[3] };
+  });
+  // v5: tier-asymptote shrinkage. A single trophy's fitted asymptote is
+  // barely identified from a handful of snapshots, so pull it 25% toward
+  // the median fitted asymptote of its tier and rescale the growth above
+  // the last rate by A'/A, then re-apply the headroom cap and the floor.
+  const byTier = new Map<string, number[]>();
+  for (const r of rows) {
+    const arr = byTier.get(r.tier) ?? [];
+    arr.push(Math.max(0, r.asym));
+    byTier.set(r.tier, arr);
+  }
+  const tierMed = new Map<string, number>();
+  for (const [tier, arr] of byTier) {
+    const srt = [...arr].sort((a, b) => a - b);
+    tierMed.set(tier, srt[Math.floor(srt.length / 2)]);
+  }
+  return rows.map((r) => {
+    const tm = tierMed.get(r.tier) ?? r.asym;
+    const aPrime = TIER_SHRINK_OWN * r.asym + (1 - TIER_SHRINK_OWN) * tm;
+    let m = r.med;
+    if (m > r.lastRate && r.asym > 0) m = r.lastRate + (m - r.lastRate) * (aPrime / r.asym);
+    const lr2 = Math.max(r.lastRate, 0.01);
+    m = Math.min(m, lr2 + HEADROOM_CLOSE * (100 - lr2));
+    m = Math.min(99.99, Math.max(0.01, Math.max(m, r.floorRate)));
+    if (r.lastRate >= 100) m = 99.99;
+    return { id: r.id, q: quantiles(logit(m), r.s) };
   });
 }
 
