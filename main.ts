@@ -1,3 +1,44 @@
+// gta6-trophy-rarity-forecast-01 — v22.
+//
+// v22 changes over v19:
+//  - TREND branch, few snapshots only: headroom cap 0.40 at <= 3 snapshots
+//    (was 0.60 everywhere since v5), applied in xform4 (each family's
+//    transformed median) and in the final tier-shrink step. A re-probe of
+//    v5's cap on the new base: v5 tuned 0.6 on the PICK base (gamma 0.8,
+//    no pool median); since v6/v9 the <=3 median is a POOL median and the
+//    overshoot bias persists (Gompertz median signed error +0.18 logit on
+//    the 19-case check). Diagnostic first (diag22c.py, exact replay from
+//    diag22.json, reproduces v19 0.3893 on 21 3-snapshot cases): the
+//    final-step cap alone gives 0.50 -> 0.3729, 0.45 -> 0.3649,
+//    0.40 -> 0.3552, 0.35 -> 0.3488, 0.30 -> 0.3475; 0.40 wins ALL 21
+//    cases, 0.35 loses 2, 0.30 loses 3. So 0.40 is the loosest point in
+//    the flat 0.30-0.40 region winning every case -- the middle, safest
+//    point by the v19 precedent, keeping margin vs tighter values and vs
+//    the real final (20% of synthetic truths close >0.35 of the gap, 13%
+//    >0.45; the cap is a prior on growth speed and the real week-1
+//    closure is unknown). Tier-shrink untouched (ablation: removing it
+//    loses +0.0215; shrink 0.5 is a +0.0004 wash). Scoped to <=3: the cap
+//    stays 0.60 at 4+ snapshots, where fits are better, and every non-
+//    3-snapshot case is bit-identical to v19. Measured with the real
+//    main.ts on practice + synth1-32: practice unchanged 0.1066;
+//    mean 1-20 0.3041 -> 0.2904, 3-snapshot mean (9 cases) 0.3739 ->
+//    0.3434; mean 1-30 0.3356 -> 0.3154, mean 1-32 0.3404 -> 0.3189,
+//    3-snapshot 19-case mean 0.3868 -> 0.3549, 21-case 0.3893 -> 0.3565;
+//    fresh pair 29/30 0.4399 -> 0.3858, fresh pair 31/32 (seeds 201/211,
+//    generated BEFORE the build) 0.4131 -> 0.3716. Per truth family on
+//    the 3-snapshot cases: delayed 10/10 win (0.4075 -> 0.3452), Gompertz
+//    7/10 win (0.3851 -> 0.3784), satexp ties (+0.0003). Caveat, stated
+//    plainly: synth8 is the cost (+0.0576, 0.3636 -> 0.4212, coverage
+//    0.87 -> 0.82) -- its truths close more of the gap than a 0.40 cap
+//    allows -- plus synth32 (+0.0054) and synth12 (+0.0003); the cap
+//    trades those three cases for large wins on the other eighteen.
+//    Best is now v22. The headroom axis is now re-probed, not open:
+//    0.30-0.40 is flat and 0.45-0.50 win less, so no further point on
+//    this axis is worth trying without a new diagnostic signal.
+//    (This round's other ideas: rolling-origin 1-step family drop and
+//    the floor/N axis were both diagnosed and closed BEFORE the build --
+//    see README; the web-search sources are listed there.)
+//
 // gta6-trophy-rarity-forecast-01 — v19.
 //
 // v19 changes over v18:
@@ -257,6 +298,8 @@ const GROWTH_DAMPEN = 0.8;
     synthetic truths close at most 0.67 of the gap (p95 <= 0.54), and the
     result is flat for 0.5-0.7. */
 const HEADROOM_CLOSE = 0.6;
+/** Headroom cap at <= 3 snapshots (v22): 0.40, see header. */
+const HEADROOM_CLOSE_FEW = 0.40;
 /** Tier-asymptote shrinkage (v5): weight on a trophy's own fitted asymptote
     when pulling it toward its tier's median fitted asymptote. */
 const TIER_SHRINK_OWN = 0.75;
@@ -550,7 +593,7 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     const xform4 = (mm: number): number => {
       let v = mm;
       if (v > lr) v = lr * Math.pow(v / lr, snaps.length <= 3 ? 0.65 : GROWTH_DAMPEN);
-      v = Math.min(v, lr + HEADROOM_CLOSE * (100 - lr));
+      v = Math.min(v, lr + (snaps.length <= 3 ? HEADROOM_CLOSE_FEW : HEADROOM_CLOSE) * (100 - lr));
       return Math.min(99.99, Math.max(0.01, Math.max(v, floorRate)));
     };
     const meds5 = cands.map((cd) => xform4(cd[0])).sort((a, b) => a - b);
@@ -598,7 +641,7 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     let m = snaps.length <= 3 ? r.medFew : r.med;
     if (m > r.lastRate && r.asym > 0) m = r.lastRate + (m - r.lastRate) * (aPrime / r.asym);
     const lr2 = Math.max(r.lastRate, 0.01);
-    m = Math.min(m, lr2 + HEADROOM_CLOSE * (100 - lr2));
+    m = Math.min(m, lr2 + (snaps.length <= 3 ? HEADROOM_CLOSE_FEW : HEADROOM_CLOSE) * (100 - lr2));
     m = Math.min(99.99, Math.max(0.01, Math.max(m, r.floorRate)));
     if (r.lastRate >= 100) m = 99.99;
     // v13: at <= 3 snapshots widen ONLY the lower tail (x1.2) on top
