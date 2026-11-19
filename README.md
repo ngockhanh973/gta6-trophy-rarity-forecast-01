@@ -278,6 +278,25 @@ often identical and a refresh arrives as one jump in `players_tracked`.
   tried (gate, 1/SSE, exp(−SSE/T)). No code change; best stays v13.
   The SSE family is now closed alongside spread and γ.
 
+- **v15 (REJECTED): logit-space trimmed mean at ≤ 3 snapshots.** Average
+  the middle three transformed medians in logit space (mean of logit(m),
+  then inv-logit) instead of rate space — the idea was that logit-averaging
+  downweights a high outlier family more than rate-averaging does.
+  Measured on practice + synth1–20 with the real `main.ts` (variant file
+  `var-v15-logitmean.ts` in the work dir). It LOSES on both gates: mean
+  1–20 0.3177 vs v13's 0.3156, 3-snapshot mean (9 cases) 0.4039 vs 0.3993;
+  practice unchanged at 0.1066. It loses 7 of the 9 three-snapshot cases
+  (only synth20 wins, by 0.0032; synth10 is a 0.0001 tie-loss) and the
+  damage is worst exactly on the overshoot cases it was meant to fix —
+  synth16 0.4046 → 0.4202, synth18 0.4228 → 0.4384, synth8 0.3992 →
+  0.4028. Mechanism, measured not hypothesised: the logit-mean sits
+  ABOVE the rate-mean here — the pooled medians sit near/above 50% on
+  the trophies that dominate 3-snapshot error, where inv-logit is
+  concave, so averaging in logit space pushes the median further UP,
+  feeding the overshoot bias instead of fighting it. The "downweight
+  high outliers" intuition was backwards in this rate range. No code
+  change; best stays v13. The logit-averaging family is closed.
+
 - **Fresh-seed validation, round 3 (synth19/20, before v14).**
   `gen_synth1920.py` in the work dir, not committed: synth19 delayed
   logistic, seed 81, 3 snapshots; synth20 Gompertz late-rise, seed 91,
