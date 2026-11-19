@@ -1,4 +1,30 @@
-// gta6-trophy-rarity-forecast-01 — v13.
+// gta6-trophy-rarity-forecast-01 — v16.
+//
+// v16 changes over v13 (v15 was a rejected attempt, see README):
+//  - TREND branch, few snapshots only: at <= 3 snapshots the median is the
+//    mean of the LOWEST three of the five families' transformed target
+//    medians (meds5[0..2]) instead of the trimmed mean of the middle three.
+//    The two highest families are dropped outright, so an early-rising
+//    family that fits the 3 early reads and extrapolates high cannot drag
+//    the median — the direct answer to the measured overshoot bias
+//    (signed error +0.35/+0.51 logit on late-rise 3-snapshot cases).
+//    Wins both gates vs v13: mean 1-20 0.3156 -> 0.3128, 3-snapshot mean
+//    (9 cases) 0.3993 -> 0.3932; practice unchanged 0.1066. Wins 5 of 9
+//    three-snapshot cases — synth10 0.4701 -> 0.4335, synth20 0.3944 ->
+//    0.3381, synth17 0.3992 -> 0.3792, synth19 0.3935 -> 0.3794, synth15
+//    0.4896 -> 0.4758 — and loses 4: synth12 0.2199 -> 0.2465 (the
+//    balanced case, expected cost), synth16 0.4046 -> 0.4346, synth18
+//    0.4228 -> 0.4473, synth8 0.3992 -> 0.4041. Caveat, stated plainly:
+//    two FRESH seeds generated after the win (synth21 delayed seed 101,
+//    synth22 Gompertz seed 112) split 1-1 — synth21 0.3978 -> 0.3817,
+//    synth22 0.4320 -> 0.4570, mean 0.4149 -> 0.4193 — so the win rests on
+//    the 20-case set; on all 22 cases v16 still wins both gates (mean
+//    1-22 0.3246 -> 0.3225, 3-snap 11 cases 0.4021 -> 0.3980). The effect
+//    is family-dependent: it helps delayed-logistic truth consistently
+//    (s10/15/17/19/21 all win) and is mixed on Gompertz late-rise
+//    (s20 wins big, s16/18/22 lose). Practice unchanged. Best is now v16.
+//
+// v13 changes over v12 (see README for measurements):
 //
 // v13 changes over v12 (see README for measurements):
 //  - TREND branch, few snapshots only: at <= 3 snapshots the LOWER tail
@@ -472,7 +498,10 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     const meds5 = cands.map((cd) => xform4(cd[0])).sort((a, b) => a - b);
     // v11: trimmed mean-of-5 at <=3 snapshots — drop the min/max transformed
     // medians and average the middle three instead of taking the middle value.
-    const medFew = (meds5[1] + meds5[2] + meds5[3]) / 3;
+    // v16: asymmetric top-only trim — average the LOWEST three
+    // transformed medians (meds5[0..2]), dropping the two highest families
+    // outright, so the early-rising blow-up family cannot drag the median.
+    const medFew = (meds5[0] + meds5[1] + meds5[2]) / 3;
     return { id: t.id, q: quantiles(logit(med), s), med, s, lastRate, floorRate, tier: t.tier, asym: pick[3], medFew };
   });
   // v5: tier-asymptote shrinkage. A single trophy's fitted asymptote is
