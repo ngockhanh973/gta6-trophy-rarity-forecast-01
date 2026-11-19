@@ -130,6 +130,26 @@ often identical and a refresh arrives as one jump in `players_tracked`.
   synth14 0.3372), which confirms v8's ≤ 3 scope with 5 families. Mean
   1–14 0.2815 → **0.2713**, mean 1–9 0.2694 → 0.2584. **Best is now v9.**
 
+- **v10 (REJECTED): spread recalibration in the few-snapshot regime.**
+  Five variants on top of v9, all scoped to snapshots ≤ 3 (the only cases
+  with low coverage — synth8/10 at 0.84–0.87 vs 0.95–0.98 elsewhere),
+  all measured on practice + synth1–14 with the real `main.ts` (variant
+  files `var-v10*.ts` in the work dir): blanket spread multiplier ×1.5
+  (v10a: mean 1–14 0.2779) and ×2.0 (v10b: 0.2874); additive +0.5 in
+  quadrature (v10d: 0.2737); family-disagreement spread in quadrature,
+  k = 0.5 (v10c: 0.2712) and k = 1.0 (v10e: 0.2726) — the disagreement
+  version scoped to ≤ 3 only, where v6's global version was already a
+  trade-off. None beats v9 (0.2713): the disagreement k = 0.5 is a
+  0.0001 tie, i.e. noise (synth8 0.3981 → 0.3959, synth10 0.4743 →
+  0.4729, synth12 0.2078 → 0.2106), and every other variant loses.
+  Widening buys coverage — v10a takes synth8 to 0.98 and synth10 to
+  0.91 — but pays more pinball than it saves, even on synth10 itself
+  at ×1.5 (0.4743 → 0.4999), and heavily on synth12, whose median is
+  already right (0.2078 → 0.2640 at ×1.5, → 0.3206 at ×2.0). Lesson:
+  the few-snapshot coverage gap is a *median* problem (a biased median
+  at 3 snapshots), not a spread problem — no width fixes it, so this
+  direction is closed. No code change; best stays v9.
+
 ## Local measurements (practice answers reconstructed from the kit's
 published refresh aggregates: 04:30 read, 3,868 players, 4,276 earned,
 100% trophy unchanged, other trophies ×0.2208 — proxy, not the true rates)
@@ -239,16 +259,21 @@ the real `main.ts`; variant files in the work dir):
   worse everywhere that matters (mean 1–4 0.2290/0.2327, synth8
   0.66/0.62). The shrinkage, not a hard clip, is the right shape.
 
-Next idea worth trying for v10: spread recalibration in the
-few-snapshot regime — 90% coverage is still only 0.84–0.87 on synth8/10
-after v9 (median wins there) while 0.95–0.98 elsewhere, so the band is
-too narrow exactly where the median is most uncertain. Candidates: a
-spread multiplier scoped to snapshots ≤ 3–4, or spread added in
-quadrature from the median's own uncertainty (spread of the five
-families' transformed medians). Only keep it if mean pinball loss
-improves, not merely coverage — widening the band always buys coverage
-and always pays pinball where the median is already right. Note the
-spread knob tried for v6 (disagreement spread, k = 0.25–1.0) was a
-trade-off, not a win, so a few-snapshot-scoped version must be measured
-on all of synth1–14, not just synth8/10. (The v9 idea — a 5th delayed
-logistic family — is done and is now the best.)
+Next ideas worth trying for v11 (in order):
+1. *Trimmed mean-of-5 at ≤ 3 snapshots* — drop the min/max transformed
+   medians and average the middle three instead of taking the middle
+   value. The median-of-5 discards two families entirely; the trimmed
+   mean uses more of the pool while still capping blow-ups. One-line
+   change, measure on synth1–14.
+2. *Fresh-seed validation cases* (synth15/16: delayed logistic and
+   Gompertz at 3 snapshots, new seeds, generated after v9) — v9's
+   median-of-5 scope was confirmed on synth13/14 for the ≤ 4 boundary,
+   but the 3-snapshot median itself has only been measured on the three
+   cases that motivated it (synth8/10/12); fresh seeds check it is not
+   seed-luck before further tuning on top of it.
+3. *Signed-error check on synth8/10* — measure whether the 3-snapshot
+   medians err one-sidedly (late-rise truth should make fitted curves
+   lag, i.e. undershoot). If the bias is one-sided, an asymmetric
+   spread (wider upper quantile only) could help without paying on
+   synth12; if it is two-sided, nothing in the spread family will help
+   and the median itself must improve (idea 1).
