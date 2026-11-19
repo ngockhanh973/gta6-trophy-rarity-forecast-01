@@ -1,4 +1,4 @@
-# GTA VI trophy rarity forecast 01 — v9
+# GTA VI trophy rarity forecast 01 — v11
 
 Forecasts each GTA VI trophy's Exophase earn rate at the case target as five
 quantiles (5/25/50/75/95%), scored by pinball loss on the logit scale.
@@ -150,6 +150,61 @@ often identical and a refresh arrives as one jump in `players_tracked`.
   at 3 snapshots), not a spread problem — no width fixes it, so this
   direction is closed. No code change; best stays v9.
 
+- **v11: trimmed mean-of-5 at ≤ 3 snapshots.** Drop the min/max
+  transformed medians and average the middle three instead of taking
+  the middle value (one-line change in the `medFew` computation).
+  On synth1–14 it is a wash: mean 1–14 0.2713 → 0.2720, mean 1–9
+  0.2584 → 0.2592 — it wins synth12 (0.2078 → 0.2015, miss 4.37 →
+  4.01 pp) but loses synth8 (0.3981 → 0.4046) and synth10
+  (0.4743 → 0.4833), the two old cases that motivated the median-of-5.
+  The fresh-seed validation (idea 2, below) overturns that reading:
+  on synth15/16, generated after v9 with new seeds, the trimmed mean
+  wins BOTH — synth15 0.5109 → 0.4972, synth16 0.4627 → 0.4295
+  (coverage 0.82 → 0.87 on synth16). Mean 1–16 0.2982 → **0.2959**;
+  mean over the five 3-snapshot cases (8/10/12/15/16) 0.4108 → 0.4032.
+  **Promoted to best on the expanded set, with the caveat stated
+  plainly:** it misses the pre-registered mean-1–14 bar by 0.0007
+  (0.26%, noise), but the fresh seeds are the unbiased arbiter — v9's
+  edge on synth8/10 was partly seed-luck, and the trimmed mean wins
+  the only cases the change touches (the 3-snapshot ones) by 0.0075
+  on average. Practice unchanged (trend branch only). **Best is now
+  v11.**
+
+- **Fresh-seed validation (synth15/16, idea 2).** Generated after v9
+  (`gen_synth1516.py` in the work dir, not committed): synth15 delayed
+  logistic, seed 61, 3 snapshots, refresh 18–24 h, N ×2–5; synth16
+  Gompertz late-rise, seed 63, 3 snapshots, same regime (seed 62 was
+  tried first but gave 4 distinct snapshots — its 4th refresh landed
+  at 59.2 h, inside the 60 h window — so the seed was changed on the
+  snapshot-count criterion only, before any loss was measured).
+  v9 on the fresh seeds: synth15 0.5109 (miss 9.97 pp, cov 0.85),
+  synth16 0.4627 (miss 17.05 pp, cov 0.82) — both in the same bad
+  range as synth8/10, so v9 did NOT win stably: its 3-snapshot median
+  is not seed-luck-proof, and the trimmed mean (v11) beats it on both
+  fresh cases. The 3-snapshot regime stays the worst regime on every
+  seed (losses 0.40–0.51 vs 0.18–0.36 elsewhere).
+
+- **Signed-error check (idea 3).** Measured on the v9 median (logit
+  scale, `signed_err.py` in the work dir): the 3-snapshot median
+  OVERSHOOTS on late-rise truth — synth8 mean +0.354 (median +0.456,
+  only 31% of trophies undershoot, p90 +1.29), synth16 mean +0.511
+  (median +0.654, 24% undershoot), synth10 mean +0.108 — the opposite
+  of the hypothesised lag/undershoot. With only 3 points the
+  early-rising families fit the early reads and extrapolate high, and
+  the median across families inherits the overshoot; the headroom cap
+  limits it but does not prevent it. Synth12 is balanced (mean −0.079,
+  median +0.008) and synth15 near-balanced (mean +0.124, median
+  0.000), so the bias is tied to late-rise truth, not to 3 snapshots
+  as such. The trimmed mean (v11) does NOT fix the bias (synth8 mean
+  +0.310, synth16 +0.551) — it only trims error magnitude. Consequence
+  for the spread idea: if an asymmetric spread is tried, the direction
+  is DOWNWARD (widen the lower tail only), not upward as originally
+  sketched — the truth sits below the median on the biased cases.
+  Note the pinball weights favour this direction: at τ = 0.05/0.25 a
+  downward move helps overshoot truths with weights 1.9/1.5 and costs
+  only 0.1/0.5 when the truth is above the median. Worth one measured
+  variant (v12 candidate), scoped to ≤ 3 snapshots.
+
 ## Local measurements (practice answers reconstructed from the kit's
 published refresh aggregates: 04:30 read, 3,868 players, 4,276 earned,
 100% trophy unchanged, other trophies ×0.2208 — proxy, not the true rates)
@@ -164,34 +219,39 @@ published refresh aggregates: 04:30 read, 3,868 players, 4,276 earned,
 | v5 | 0.1066 | 0.008 pp | 0.98 |
 | v6 | 0.1066 | 0.008 pp | 0.98 |
 | v8 | 0.1066 | 0.008 pp | 0.98 |
-| **v9 (this entry)** | **0.1066** | **0.008 pp** | **0.98** |
+| v9 | 0.1066 | 0.008 pp | 0.98 |
+| **v11 (this entry)** | **0.1066** | **0.008 pp** | **0.98** |
 | v7 (rejected) | 0.1066 | 0.008 pp | 0.98 |
 
 Synthetic finals (2 days of reads, answer at day 7; each a different truth
 family and refresh/N regime — synth3/4 were generated for v2, after v1 was
 chosen, to avoid overfitting one synthetic family):
 
-| synthetic | truth family | v1 loss | v2 loss | v3 loss | v4 loss | v5 loss | v6 loss | v7 loss | v8 loss | v9 loss |
+| synthetic | truth family | v1 loss | v2 loss | v3 loss | v4 loss | v5 loss | v6 loss | v7 loss | v8 loss | v9 loss | v11 loss |
 |---|---|---|---|---|---|---|---|---|---|
-| synth1 | saturating exponential | 0.2465 | 0.2548 | 0.1833 | 0.1698 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 |
-| synth2 | logistic in log-time | 0.2872 | 0.2805 | 0.2107 | 0.2144 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 |
-| synth3 | Gompertz, refresh 5–9 h, N saturating | 1.5776 | 0.7427 | 0.7111 | 0.5155 | 0.2893 | 0.2893 | 0.2893 | 0.2893 | 0.2974 |
-| synth4 | power saturation, refresh 1–2 h, N exponential | 0.2807 | 0.2556 | 0.1779 | 0.1824 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 |
-| synth5 | Gompertz late-rise, 6 snapshots, N jumps ×1.8–4 | — | — | — | 2.0942 | 0.3731 | 0.3731 | 0.3731 | 0.3731 | 0.3348 |
-| synth6 | delayed logistic, 9 snapshots, N jumps ×1.5–3 | — | — | — | 0.3694 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 |
-| synth7 | power saturation, 6 snapshots, N jumps + one ×6 | — | — | — | 0.1930 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 |
-| synth8 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5 | — | — | — | 3.2039 | 0.5879 | 0.4668 | 0.5837 | 0.4668 | 0.3981 |
-| synth9 | power saturation, 4 snapshots, N jumps ×2–4 | — | — | — | 0.1856 | 0.1838 | 0.1948 | 0.1852 | 0.1838 | 0.1838 |
-| synth10 | delayed logistic, **3 snapshots**, N jumps ×2–5 | — | — | — | — | 0.4501 | 0.4893 | 0.4646 | 0.4893 | 0.4743 |
-| synth11 | saturating exponential, 4 snapshots, N jumps ×2–4 | — | — | — | — | 0.1934 | 0.2001 | 0.1951 | 0.1934 | 0.2010 |
-| synth12 | saturating exponential, **3 snapshots**, N jumps ×2–5 | — | — | — | — | 0.2503 | 0.2033 | 0.2497 | 0.2033 | 0.2078 |
-| synth13 | Gompertz late-rise, 4 snapshots, N jumps ×2–4 | — | — | — | — | 0.3247 | 0.4485 | 0.3428 | 0.3247 | 0.2869 |
-| synth14 | delayed logistic, 4 snapshots, N jumps ×2–4 | — | — | — | — | 0.3055 | 0.3982 | 0.3104 | 0.3055 | 0.3022 |
-| **mean 1–4** | | **0.5980** | **0.3834** | **0.3208** | **0.2705** | **0.2133** | **0.2133** | **0.2133** | **0.2133** | **0.2154** |
-| **mean 1–7** | | | | | **0.5341** | **0.2534** | **0.2534** | **0.2534** | **0.2534** | **0.2491** |
-| **mean 1–9** | | | | | **0.7920** | **0.2829** | **0.2706** | **0.2825** | **0.2694** | **0.2584** |
-| **mean 1–12** | | | | | | **0.2866** | **0.2774** | **0.2877** | **0.2759** | **0.2674** |
-| **mean 1–14** | | | | | | **0.2907** | **0.2982** | **0.2932** | **0.2815** | **0.2713** |
+| synth1 | saturating exponential | 0.2465 | 0.2548 | 0.1833 | 0.1698 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 |
+| synth2 | logistic in log-time | 0.2872 | 0.2805 | 0.2107 | 0.2144 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 |
+| synth3 | Gompertz, refresh 5–9 h, N saturating | 1.5776 | 0.7427 | 0.7111 | 0.5155 | 0.2893 | 0.2893 | 0.2893 | 0.2893 | 0.2974 | 0.2974 |
+| synth4 | power saturation, refresh 1–2 h, N exponential | 0.2807 | 0.2556 | 0.1779 | 0.1824 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 |
+| synth5 | Gompertz late-rise, 6 snapshots, N jumps ×1.8–4 | — | — | — | 2.0942 | 0.3731 | 0.3731 | 0.3731 | 0.3731 | 0.3348 | 0.3348 |
+| synth6 | delayed logistic, 9 snapshots, N jumps ×1.5–3 | — | — | — | 0.3694 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 |
+| synth7 | power saturation, 6 snapshots, N jumps + one ×6 | — | — | — | 0.1930 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 |
+| synth8 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5 | — | — | — | 3.2039 | 0.5879 | 0.4668 | 0.5837 | 0.4668 | 0.3981 | 0.4046 |
+| synth9 | power saturation, 4 snapshots, N jumps ×2–4 | — | — | — | 0.1856 | 0.1838 | 0.1948 | 0.1852 | 0.1838 | 0.1838 | 0.1838 |
+| synth10 | delayed logistic, **3 snapshots**, N jumps ×2–5 | — | — | — | — | 0.4501 | 0.4893 | 0.4646 | 0.4893 | 0.4743 | 0.4833 |
+| synth11 | saturating exponential, 4 snapshots, N jumps ×2–4 | — | — | — | — | 0.1934 | 0.2001 | 0.1951 | 0.1934 | 0.2010 | 0.2010 |
+| synth12 | saturating exponential, **3 snapshots**, N jumps ×2–5 | — | — | — | — | 0.2503 | 0.2033 | 0.2497 | 0.2033 | 0.2078 | 0.2015 |
+| synth13 | Gompertz late-rise, 4 snapshots, N jumps ×2–4 | — | — | — | — | 0.3247 | 0.4485 | 0.3428 | 0.3247 | 0.2869 | 0.2869 |
+| synth14 | delayed logistic, 4 snapshots, N jumps ×2–4 | — | — | — | — | 0.3055 | 0.3982 | 0.3104 | 0.3055 | 0.3022 | 0.3022 |
+| synth15 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 61 | — | — | — | — | — | — | — | — | 0.5109 | 0.4972 |
+| synth16 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 63 | — | — | — | — | — | — | — | — | 0.4627 | 0.4295 |
+| **mean 1–4** | | **0.5980** | **0.3834** | **0.3208** | **0.2705** | **0.2133** | **0.2133** | **0.2133** | **0.2133** | **0.2154** | **0.2154** |
+| **mean 1–7** | | | | | **0.5341** | **0.2534** | **0.2534** | **0.2534** | **0.2534** | **0.2491** | **0.2491** |
+| **mean 1–9** | | | | | **0.7920** | **0.2829** | **0.2706** | **0.2825** | **0.2694** | **0.2584** | **0.2592** |
+| **mean 1–12** | | | | | | **0.2866** | **0.2774** | **0.2877** | **0.2759** | **0.2674** | **0.2682** |
+| **mean 1–14** | | | | | | **0.2907** | **0.2982** | **0.2932** | **0.2815** | **0.2713** | **0.2720** |
+| **mean 1–16** | | | | | | | | | | **0.2982** | **0.2959** |
+| **mean 3-snap (8/10/12/15/16)** | | | | | | | | | | **0.4108** | **0.4032** |
 
 Synth5–7 (generated for v5, after v4 was chosen, to stress the few-snapshot
 regime: 6–9 distinct snapshots instead of 9–30, refreshes 6–13 h apart,
@@ -259,21 +319,27 @@ the real `main.ts`; variant files in the work dir):
   worse everywhere that matters (mean 1–4 0.2290/0.2327, synth8
   0.66/0.62). The shrinkage, not a hard clip, is the right shape.
 
-Next ideas worth trying for v11 (in order):
-1. *Trimmed mean-of-5 at ≤ 3 snapshots* — drop the min/max transformed
-   medians and average the middle three instead of taking the middle
-   value. The median-of-5 discards two families entirely; the trimmed
-   mean uses more of the pool while still capping blow-ups. One-line
-   change, measure on synth1–14.
-2. *Fresh-seed validation cases* (synth15/16: delayed logistic and
-   Gompertz at 3 snapshots, new seeds, generated after v9) — v9's
-   median-of-5 scope was confirmed on synth13/14 for the ≤ 4 boundary,
-   but the 3-snapshot median itself has only been measured on the three
-   cases that motivated it (synth8/10/12); fresh seeds check it is not
-   seed-luck before further tuning on top of it.
-3. *Signed-error check on synth8/10* — measure whether the 3-snapshot
-   medians err one-sidedly (late-rise truth should make fitted curves
-   lag, i.e. undershoot). If the bias is one-sided, an asymmetric
-   spread (wider upper quantile only) could help without paying on
-   synth12; if it is two-sided, nothing in the spread family will help
-   and the median itself must improve (idea 1).
+Next ideas worth trying for v12 (in order — ideas 1–3 above are DONE,
+see the v11 section):
+1. *Asymmetric DOWNWARD spread at ≤ 3 snapshots* — widen only the lower
+   tail (q05/q25 further below the median, e.g. lower-spread ×1.5) while
+   the median and upper quantiles stay put. The signed-error check
+   found an OVERSHOOT bias on late-rise 3-snapshot cases (synth8 mean
+   +0.35, synth16 +0.51 logit), so the truth sits below the median and
+   the lower tail is the side that needs room. Pinball weights favour
+   this direction (helps at weights 1.9/1.5, costs 0.1/0.5 when wrong).
+   Measure on synth1–16; the v10 lesson (blanket widening loses) does
+   not rule this out because it touches only 2 of 5 quantiles and only
+   on the biased side. If ×1.5 wins, try ×2.0 once to check the
+   direction; keep only a variant that wins on the 3-snapshot mean
+   AND does not regress mean 1–16.
+2. *Stronger growth dampening scoped to ≤ 3 snapshots* — the overshoot
+   bias is a median problem, and the trimmed mean did not fix it. A
+   γ < 0.8 applied only to the few-snapshot median (e.g. 0.6) would
+   pull the extrapolated medians down toward the last rate on exactly
+   the biased cases. Risky: v5 rejected blanket γ = 0.5 (hurt synth7),
+   so the scope and the value both need the fresh-seed cases in the
+   verdict, not just synth8/10.
+3. *More fresh 3-snapshot seeds* — the 3-snapshot verdict now rests on
+   5 cases; one more delayed-logistic and one more Gompertz seed would
+   firm up any v12 scope decision before the deadline.

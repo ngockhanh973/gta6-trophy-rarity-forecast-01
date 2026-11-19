@@ -1,5 +1,25 @@
-// gta6-trophy-rarity-forecast-01 — v9.
+// gta6-trophy-rarity-forecast-01 — v11.
 //
+// v11 changes over v9 (see README for measurements):
+//  - TREND branch, few snapshots only: at <= 3 snapshots the median is the
+//    TRIMMED MEAN of the five families' transformed target medians — drop
+//    the min/max and average the middle three — instead of the median-of-5
+//    (middle value). The median-of-5 discards two families entirely; the
+//    trimmed mean uses more of the pool while still capping blow-ups.
+//    On synth1-14 it is a 0.0007 wash (mean 1-14 0.2713 -> 0.2720: wins
+//    synth12 0.2078 -> 0.2015, loses synth8/10 by 0.006/0.009), but on the
+//    two FRESH-seed 3-snapshot cases generated after v9 (synth15 delayed
+//    logistic, synth16 Gompertz) it wins both, 0.5109 -> 0.4972 and
+//    0.4627 -> 0.4295. Mean 1-16 0.2982 -> 0.2959; 3-snapshot mean (8/10/
+//    12/15/16) 0.4108 -> 0.4032. Promoted on the expanded set: the fresh
+//    seeds are the unbiased arbiter (v9's edge on synth8/10 was partly
+//    seed-luck), and the 1-14 gap is noise (0.26%). Practice unchanged.
+//    Signed-error check (idea 3): v9/v11 medians OVERSHOOT on late-rise
+//    3-snapshot cases (synth8 mean +0.35, synth16 +0.51 logit), not
+//    undershoot as hypothesised — see README; the trimmed mean does not
+//    fix that bias, it only trims error magnitude.
+//
+// v9 changes over v8 (see README for measurements):
 // v9 changes over v8 (see README for measurements):
 //  - TREND branch: a 5th candidate family, delayed logistic —
 //    r = A / (1 + exp(-k*(log1p(max(0,t-D)) - x0))), D in 6..96 h — joins
@@ -395,12 +415,13 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     const earnCount = Math.max(1, (lastRate / 100) * lastN);
     const s = Math.min(1.5, Math.max(0.55,
       Math.sqrt((RW_SIGMA * Math.sqrt(horizonDays)) ** 2 + Math.max(resid, 0.15) ** 2 + 0.15 ** 2 + BINOM_SPREAD_NUM / earnCount)));
-    // v6/v9: median of the five families' (transformed) target medians, used
+    // v6/v9/v11: the five families' (transformed) target medians, used
     // as the median instead of the picked family's when snapshots <= 3
     // (applied in the tier-shrinkage step below; v8 narrowed the scope
     // from <= 4 to <= 3, v9 keeps it). Each family's median is
     // transformed exactly like the picked median, so the five values are
-    // comparable; the median of five is the middle value.
+    // comparable; v11 takes the trimmed mean of the middle three (v9 took
+    // the middle value).
     const xform4 = (mm: number): number => {
       let v = mm;
       if (v > lr) v = lr * Math.pow(v / lr, GROWTH_DAMPEN);
@@ -408,7 +429,9 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
       return Math.min(99.99, Math.max(0.01, Math.max(v, floorRate)));
     };
     const meds5 = cands.map((cd) => xform4(cd[0])).sort((a, b) => a - b);
-    const medFew = meds5[2];
+    // v11: trimmed mean-of-5 at <=3 snapshots — drop the min/max transformed
+    // medians and average the middle three instead of taking the middle value.
+    const medFew = (meds5[1] + meds5[2] + meds5[3]) / 3;
     return { id: t.id, q: quantiles(logit(med), s), med, s, lastRate, floorRate, tier: t.tier, asym: pick[3], medFew };
   });
   // v5: tier-asymptote shrinkage. A single trophy's fitted asymptote is
