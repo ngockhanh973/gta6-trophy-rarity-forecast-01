@@ -2,7 +2,7 @@
 [![rank](https://make.fun/badge/gta6-trophy-rarity-forecast-01/ngockhanh973/gta6-trophy-rarity-forecast-01/rank.svg)](https://make.fun/bounty/gta6-trophy-rarity-forecast-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-trophy-rarity-forecast-01)
 [![reward](https://make.fun/badge/gta6-trophy-rarity-forecast-01/ngockhanh973/gta6-trophy-rarity-forecast-01/reward.svg)](https://make.fun/bounty/gta6-trophy-rarity-forecast-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-trophy-rarity-forecast-01)
 
-# GTA VI trophy rarity forecast 01 — v22
+# GTA VI trophy rarity forecast 01 — v23
 
 Forecasts each GTA VI trophy's Exophase earn rate at the case target as five
 quantiles (5/25/50/75/95%), scored by pinball loss on the logit scale.
@@ -619,6 +619,57 @@ often identical and a refresh arrives as one jump in `players_tracked`.
   axis — were both diagnosed and closed BEFORE the build; see the two
   sections above.)
 
+- **Fresh-seed validation, round 10 (synth33/34, before v23).**
+  `gen_synth3334.py` in the work dir, not committed: synth33 delayed
+  logistic, seed 221, 3 snapshots; synth34 Gompertz late-rise, seed 231,
+  3 snapshots — both gave 3 distinct snapshots on the first seed tried
+  (seed chosen on the snapshot-count criterion only, before any loss was
+  measured, and before the v23 variant existed). v22 on them: synth33
+  0.4911 (miss 5.18 pp, cov 0.93), synth34 0.4357 (miss 10.14 pp,
+  cov 0.89) — pair mean 0.4634, the worst fresh pair yet (both families
+  at their hard end: the delayed case barely moves, the Gompertz case
+  closes fast). Their diagnostic signals were computed before the build
+  too: case-mean uncapped pool closure 0.239 (synth33) and 0.628
+  (synth34) against truth closures 0.069 / 0.358 — one slow, one fast,
+  both far from the 0.53 threshold the v23 rule uses.
+
+- **v23: adaptive per-family headroom cap at ≤ 3 snapshots (on top of
+  v22).** The v22 cost was concentrated and split: loosening ONLY the
+  xform4 cap to 0.60 (variant B, final-step cap still 0.40) wins big on
+  FAST-closing cases — synth8 0.4212 → 0.3630, synth16 −0.0355, synth18
+  −0.0314, synth22 −0.0289, synth32 −0.0334, synth26 −0.0231 — and
+  loses on SLOW-closing cases (+0.011 to +0.033 on synth10/15/17/19/21/
+  23/25/29/31). The split is almost bimodal in truth closure: fast
+  cases close 0.29–0.39 of the gap on average, slow cases 0.06–0.15.
+  Diagnostic first (`diag23c.py`, exact replay from `diag22.json` +
+  `diag22b.json`, reproduces v22 0.3565 on 21 3-snapshot cases): the
+  signal that separates them BEFORE the cap binds is the case-mean
+  UNCAPPED pool closure — pool median rebuilt from the raw family
+  medians (γ = 0.65, no cap, v18 low3/mid3 rule), closure
+  (pool − lastRate)/(100 − lastRate) averaged over the case's trophies.
+  Fast cases score 0.555–0.679, slow cases 0.069–0.517; 0.53 sits
+  mid-gap, the middle safest point by the v19/v22 precedent (T = 0.53
+  and 0.55 give identical results, T = 0.45/0.50 one case worse,
+  T = 0.60 misses fast cases). Above 0.53 the per-family cap is 0.60,
+  below it v22's 0.40 stands; the final-step cap stays 0.40 either way.
+  Per-trophy thresholding on the same signal was also screened and is
+  noise (best 0.3561 vs v22's 0.3565), so the switch is case-level, not
+  per-trophy. Measured with the real `main.ts` (variant
+  `var-v23-adaptive-cap.ts` in the work dir): it wins BOTH gates vs
+  v22 — mean 1–20 0.2904 → **0.2843**, 3-snapshot mean (9 cases)
+  0.3434 → **0.3297**; mean 1–32 0.3189 → 0.3121, 3-snapshot 21-case
+  mean 0.3565 → 0.3461, 23-case mean 0.3550; fresh pairs 29/30 0.3858 →
+  0.3845, 31/32 0.3716 → 0.3549, and the pre-registered fresh pair
+  33/34 0.4634 → 0.4484 (synth33 identical 0.4911 — the rule correctly
+  keeps v22 on the slow seed — synth34 0.4357 → 0.4057). Practice
+  unchanged at 0.1066, and every non-3-snapshot case is bit-identical
+  to v22. **Caveat, stated plainly:** the rule keeps v22 on ALL slow
+  cases, so the whole win comes from the 10 fast cases; synth20 is the
+  only fast case that loses (+0.0022). The threshold was placed
+  mid-gap on the 21-case set, so a future case scoring near 0.53 is
+  the known fragility — the two fresh seeds sit far from it (0.239 /
+  0.628). **Best is now v23.**
+
 - **v19: γ = 0.65 at exactly 3 snapshots (on top of v18).** The v12
   γ sweep (0.6 lost, 0.7 kept) was measured on the pre-v16/v18 base, so
   the knob was re-probed on the new base: γ = 0.65 only at 3 snapshots
@@ -726,7 +777,8 @@ published refresh aggregates: 04:30 read, 3,868 players, 4,276 earned,
 | v16 | 0.1066 | 0.008 pp | 0.98 |
 | v18 | 0.1066 | 0.008 pp | 0.98 |
 | v19 | 0.1066 | 0.008 pp | 0.98 |
-| **v22 (this entry)** | **0.1066** | **0.008 pp** | **0.98** |
+| v22 | 0.1066 | 0.008 pp | 0.98 |
+| **v23 (this entry)** | **0.1066** | **0.008 pp** | **0.98** |
 | v17 (rejected) | 0.1066 | 0.008 pp | 0.98 |
 | v7 (rejected) | 0.1066 | 0.008 pp | 0.98 |
 | v20 (rejected) | 0.1066 | 0.008 pp | 0.98 |
@@ -736,62 +788,66 @@ Synthetic finals (2 days of reads, answer at day 7; each a different truth
 family and refresh/N regime — synth3/4 were generated for v2, after v1 was
 chosen, to avoid overfitting one synthetic family):
 
-| synthetic | truth family | v1 loss | v2 loss | v3 loss | v4 loss | v5 loss | v6 loss | v7 loss | v8 loss | v9 loss | v11 loss | v12 loss | v13 loss | v16 loss | v18 loss | v19 loss | v22 loss |
+| synthetic | truth family | v1 loss | v2 loss | v3 loss | v4 loss | v5 loss | v6 loss | v7 loss | v8 loss | v9 loss | v11 loss | v12 loss | v13 loss | v16 loss | v18 loss | v19 loss | v22 loss | v23 loss |
 |---|---|---|---|---|---|---|---|---|---|
-| synth1 | saturating exponential | 0.2465 | 0.2548 | 0.1833 | 0.1698 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 |
-| synth2 | logistic in log-time | 0.2872 | 0.2805 | 0.2107 | 0.2144 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 |
-| synth3 | Gompertz, refresh 5–9 h, N saturating | 1.5776 | 0.7427 | 0.7111 | 0.5155 | 0.2893 | 0.2893 | 0.2893 | 0.2893 | 0.2974 | 0.2974 | 0.2974 | 0.2974 | 0.2974 | 0.2974 | 0.2974 | 0.2974 |
-| synth4 | power saturation, refresh 1–2 h, N exponential | 0.2807 | 0.2556 | 0.1779 | 0.1824 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 |
-| synth5 | Gompertz late-rise, 6 snapshots, N jumps ×1.8–4 | — | — | — | 2.0942 | 0.3731 | 0.3731 | 0.3731 | 0.3731 | 0.3348 | 0.3348 | 0.3348 | 0.3348 | 0.3348 | 0.3348 | 0.3348 | 0.3348 |
-| synth6 | delayed logistic, 9 snapshots, N jumps ×1.5–3 | — | — | — | 0.3694 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 |
-| synth7 | power saturation, 6 snapshots, N jumps + one ×6 | — | — | — | 0.1930 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 |
-| synth8 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5 | — | — | — | 3.2039 | 0.5879 | 0.4668 | 0.5837 | 0.4668 | 0.3981 | 0.4046 | 0.4015 | 0.3992 | 0.4041 | 0.3536 | 0.3636 | 0.4212 |
-| synth9 | power saturation, 4 snapshots, N jumps ×2–4 | — | — | — | 0.1856 | 0.1838 | 0.1948 | 0.1852 | 0.1838 | 0.1838 | 0.1838 | 0.1838 | 0.1838 | 0.1838 | 0.1838 | 0.1838 | 0.1838 |
-| synth10 | delayed logistic, **3 snapshots**, N jumps ×2–5 | — | — | — | — | 0.4501 | 0.4893 | 0.4646 | 0.4893 | 0.4743 | 0.4833 | 0.4750 | 0.4701 | 0.4335 | 0.4430 | 0.4343 | 0.3880 |
-| synth11 | saturating exponential, 4 snapshots, N jumps ×2–4 | — | — | — | — | 0.1934 | 0.2001 | 0.1951 | 0.1934 | 0.2010 | 0.2010 | 0.2010 | 0.2010 | 0.2010 | 0.2010 | 0.2010 | 0.2010 |
-| synth12 | saturating exponential, **3 snapshots**, N jumps ×2–5 | — | — | — | — | 0.2503 | 0.2033 | 0.2497 | 0.2033 | 0.2078 | 0.2015 | 0.2053 | 0.2199 | 0.2465 | 0.2465 | 0.2497 | 0.2500 |
-| synth13 | Gompertz late-rise, 4 snapshots, N jumps ×2–4 | — | — | — | — | 0.3247 | 0.4485 | 0.3428 | 0.3247 | 0.2869 | 0.2869 | 0.2869 | 0.2869 | 0.2869 | 0.2869 | 0.2869 | 0.2869 |
-| synth14 | delayed logistic, 4 snapshots, N jumps ×2–4 | — | — | — | — | 0.3055 | 0.3982 | 0.3104 | 0.3055 | 0.3022 | 0.3022 | 0.3022 | 0.3022 | 0.3022 | 0.3022 | 0.3022 | 0.3022 |
-| synth15 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 61 | — | — | — | — | — | — | — | — | 0.5109 | 0.4972 | 0.4939 | 0.4896 | 0.4758 | 0.4758 | 0.4723 | 0.4065 |
-| synth16 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 63 | — | — | — | — | — | — | — | — | 0.4627 | 0.4295 | 0.4155 | 0.4046 | 0.4346 | 0.3598 | 0.3682 | 0.3512 |
-| synth17 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 71 | — | — | — | — | — | — | — | — | 0.4226 | 0.4158 | 0.4075 | 0.3992 | 0.3792 | 0.3792 | 0.3743 | 0.3014 |
-| synth18 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 72 | — | — | — | — | — | — | — | — | 0.4710 | 0.4397 | 0.4298 | 0.4228 | 0.4473 | 0.3950 | 0.4000 | 0.3903 |
-| synth19 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 81 | — | — | — | — | — | — | — | — | — | — | — | 0.3935 | 0.3794 | 0.3794 | 0.3727 | 0.2969 |
-| synth20 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 91 | — | — | — | — | — | — | — | — | — | — | — | 0.3944 | 0.3381 | 0.3407 | 0.3295 | 0.2848 |
-| synth21 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 101 | — | — | — | — | — | — | — | — | — | — | — | — | 0.3978 | 0.3817 | 0.3817 | 0.3778 | 0.2992 |
-| synth22 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 112 | — | — | — | — | — | — | — | — | — | — | — | — | 0.4320 | 0.4570 | 0.4238 | 0.4446 | 0.4705 |
-| synth23 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 121 | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.4091 | 0.4091 | 0.4054 | 0.3719 |
-| synth24 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 131 | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.3097 | 0.3169 | 0.3120 | 0.2894 |
-| synth25 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 141 | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.3165 | 0.3081 | 0.2734 |
-| synth26 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 151 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.4921 | 0.5010 | 0.4827 |
-| synth27 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 161 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.4445 | 0.4389 | 0.3967 |
-| synth28 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 172 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.3194 | 0.3170 | 0.2973 |
-| synth29 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 181 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.5018 | 0.4172 |
-| synth30 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 191 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.3780 | 0.3544 |
-| synth31 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 201 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.3890 | 0.3007 |
-| synth32 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 211 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.4372 | 0.4426 |
-| **mean 1–4** | | **0.5980** | **0.3834** | **0.3208** | **0.2705** | **0.2133** | **0.2133** | **0.2133** | **0.2133** | **0.2154** | **0.2154** | **0.2154** | **0.2154** | 0.2154 | 0.2153 | 0.2154 |
-| **mean 1–7** | | | | | **0.5341** | **0.2534** | **0.2534** | **0.2534** | **0.2534** | **0.2491** | **0.2491** | **0.2491** | **0.2491** | 0.2491 | 0.2491 | 0.2491 |
-| **mean 1–9** | | | | | **0.7920** | **0.2829** | **0.2706** | **0.2825** | **0.2694** | **0.2584** | **0.2592** | **0.2588** | **0.2585** | 0.2591 | 0.2535 | 0.2546 | 0.2610 |
-| **mean 1–12** | | | | | | **0.2866** | **0.2774** | **0.2877** | **0.2759** | **0.2674** | **0.2682** | **0.2675** | **0.2682** | 0.2677 | 0.2643 | 0.2647 | 0.2657 |
-| **mean 1–14** | | | | | | **0.2907** | **0.2982** | **0.2932** | **0.2815** | **0.2713** | **0.2720** | **0.2714** | **0.2719** | 0.2716 | 0.2686 | 0.2690 | 0.2698 |
-| **mean 1–16** | | | | | | | | | | **0.2982** | **0.2959** | **0.2943** | **0.2938** | 0.2945 | 0.2873 | 0.2879 | 0.2834 |
-| **mean 1–18** | | | | | | | | | | **0.3147** | **0.3105** | **0.3081** | **0.3068** | 0.3077 | 0.2984 | 0.2989 | 0.2904 |
-| **mean 1–20** | | | | | | | | | | | | | **0.3156** | **0.3128**  0.3045 | 0.3041 | 0.2904 |
-| **mean 3-snap (8/10/12/15/16/17/18)** | | | | | | | | | | **0.4211** | **0.4102** | **0.4041** | **0.4008** | 0.4030 | 0.3790 | 0.3803 | 0.3584 |
-| **mean 3-snap (8/10/12/15/16/17/18/19/20)** | | | | | | | | | | | | | **0.3993** | **0.3932**  0.3748 | 0.3739 | 0.3434 |
-| **mean 1–22** | | | | | | | | | | | | | 0.3246 | 0.3225 | 0.3135 | 0.3139 | 0.2990 |
-| **mean 1–24** | | | | | | | | | | | | | | 0.3256 | 0.3176 | 0.3176 | 0.3016 |
-| **mean 3-snap (11 cases, +21/22)** | | | | | | | | | | | | | 0.4021 | 0.3979 | 0.3799 | 0.3806 | 0.3509 |
-| **mean 3-snap (13 cases, +21/22/23/24)** | | | | | | | | | | | | | | 0.3920 | 0.3773 | 0.3773 | 0.3478 |
-| **mean 1–26** | | | | | | | | | | | | | | | 0.3243 | 0.3243 | 0.3075 |
-| **mean 3-snap (15 cases, +21/22/23/24/25/26)** | | | | | | | | | | | | | | | 0.3809 | 0.3809 | 0.3518 |
-| **mean 1–28** | | | | | | | | | | | | | | | | 0.3284 | 0.3281 | 0.3103 |
-| **mean 3-snap (17 cases, +21/22/23/24/25/26/27/28)** | | | | | | | | | | | | | | | | 0.3810 | 0.3806 | 0.3513 |
-| **mean 1–30** | | | | | | | | | | | | | | | | | 0.3356 | 0.3154 |
-| **mean 3-snap (19 cases, +21/22/23/24/25/26/27/28/29/30)** | | | | | | | | | | | | | | | | | 0.3868 | 0.3549 |
-| **mean 1–32** | | | | | | | | | | | | | | | | | 0.3189 |
-| **mean 3-snap (21 cases, +21/22/23/24/25/26/27/28/29/30/31/32)** | | | | | | | | | | | | | | | | | 0.3565 |
+| synth1 | saturating exponential | 0.2465 | 0.2548 | 0.1833 | 0.1698 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 | 0.1697 |
+| synth2 | logistic in log-time | 0.2872 | 0.2805 | 0.2107 | 0.2144 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 | 0.2133 |
+| synth3 | Gompertz, refresh 5–9 h, N saturating | 1.5776 | 0.7427 | 0.7111 | 0.5155 | 0.2893 | 0.2893 | 0.2893 | 0.2893 | 0.2974 | 0.2974 | 0.2974 | 0.2974 | 0.2974 | 0.2974 | 0.2974 | 0.2974 | 0.2974 |
+| synth4 | power saturation, refresh 1–2 h, N exponential | 0.2807 | 0.2556 | 0.1779 | 0.1824 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 | 0.1810 |
+| synth5 | Gompertz late-rise, 6 snapshots, N jumps ×1.8–4 | — | — | — | 2.0942 | 0.3731 | 0.3731 | 0.3731 | 0.3731 | 0.3348 | 0.3348 | 0.3348 | 0.3348 | 0.3348 | 0.3348 | 0.3348 | 0.3348 | 0.3348 |
+| synth6 | delayed logistic, 9 snapshots, N jumps ×1.5–3 | — | — | — | 0.3694 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 | 0.3568 |
+| synth7 | power saturation, 6 snapshots, N jumps + one ×6 | — | — | — | 0.1930 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 | 0.1909 |
+| synth8 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5 | — | — | — | 3.2039 | 0.5879 | 0.4668 | 0.5837 | 0.4668 | 0.3981 | 0.4046 | 0.4015 | 0.3992 | 0.4041 | 0.3536 | 0.3636 | 0.4212 | 0.3630 |
+| synth9 | power saturation, 4 snapshots, N jumps ×2–4 | — | — | — | 0.1856 | 0.1838 | 0.1948 | 0.1852 | 0.1838 | 0.1838 | 0.1838 | 0.1838 | 0.1838 | 0.1838 | 0.1838 | 0.1838 | 0.1838 | 0.1838 |
+| synth10 | delayed logistic, **3 snapshots**, N jumps ×2–5 | — | — | — | — | 0.4501 | 0.4893 | 0.4646 | 0.4893 | 0.4743 | 0.4833 | 0.4750 | 0.4701 | 0.4335 | 0.4430 | 0.4343 | 0.3880 | 0.3880 |
+| synth11 | saturating exponential, 4 snapshots, N jumps ×2–4 | — | — | — | — | 0.1934 | 0.2001 | 0.1951 | 0.1934 | 0.2010 | 0.2010 | 0.2010 | 0.2010 | 0.2010 | 0.2010 | 0.2010 | 0.2010 | 0.2010 |
+| synth12 | saturating exponential, **3 snapshots**, N jumps ×2–5 | — | — | — | — | 0.2503 | 0.2033 | 0.2497 | 0.2033 | 0.2078 | 0.2015 | 0.2053 | 0.2199 | 0.2465 | 0.2465 | 0.2497 | 0.2500 | 0.2500 |
+| synth13 | Gompertz late-rise, 4 snapshots, N jumps ×2–4 | — | — | — | — | 0.3247 | 0.4485 | 0.3428 | 0.3247 | 0.2869 | 0.2869 | 0.2869 | 0.2869 | 0.2869 | 0.2869 | 0.2869 | 0.2869 | 0.2869 |
+| synth14 | delayed logistic, 4 snapshots, N jumps ×2–4 | — | — | — | — | 0.3055 | 0.3982 | 0.3104 | 0.3055 | 0.3022 | 0.3022 | 0.3022 | 0.3022 | 0.3022 | 0.3022 | 0.3022 | 0.3022 | 0.3022 |
+| synth15 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 61 | — | — | — | — | — | — | — | — | 0.5109 | 0.4972 | 0.4939 | 0.4896 | 0.4758 | 0.4758 | 0.4723 | 0.4065 | 0.4065 |
+| synth16 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 63 | — | — | — | — | — | — | — | — | 0.4627 | 0.4295 | 0.4155 | 0.4046 | 0.4346 | 0.3598 | 0.3682 | 0.3512 | 0.3157 |
+| synth17 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 71 | — | — | — | — | — | — | — | — | 0.4226 | 0.4158 | 0.4075 | 0.3992 | 0.3792 | 0.3792 | 0.3743 | 0.3014 | 0.3014 |
+| synth18 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 72 | — | — | — | — | — | — | — | — | 0.4710 | 0.4397 | 0.4298 | 0.4228 | 0.4473 | 0.3950 | 0.4000 | 0.3903 | 0.3589 |
+| synth19 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 81 | — | — | — | — | — | — | — | — | — | — | — | 0.3935 | 0.3794 | 0.3794 | 0.3727 | 0.2969 | 0.2969 |
+| synth20 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 91 | — | — | — | — | — | — | — | — | — | — | — | 0.3944 | 0.3381 | 0.3407 | 0.3295 | 0.2848 | 0.2870 |
+| synth21 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 101 | — | — | — | — | — | — | — | — | — | — | — | — | 0.3978 | 0.3817 | 0.3817 | 0.3778 | 0.2992 | 0.2992 |
+| synth22 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 112 | — | — | — | — | — | — | — | — | — | — | — | — | 0.4320 | 0.4570 | 0.4238 | 0.4446 | 0.4705 | 0.4416 |
+| synth23 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 121 | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.4091 | 0.4091 | 0.4054 | 0.3719 | 0.3719 |
+| synth24 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 131 | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.3097 | 0.3169 | 0.3120 | 0.2894 | 0.2886 |
+| synth25 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 141 | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.3165 | 0.3081 | 0.2734 | 0.2734 |
+| synth26 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 151 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.4921 | 0.5010 | 0.4827 | 0.4597 |
+| synth27 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 161 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.4445 | 0.4389 | 0.3967 | 0.3967 |
+| synth28 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 172 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.3194 | 0.3170 | 0.2973 | 0.2919 |
+| synth29 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 181 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.5018 | 0.4172 | 0.4172 |
+| synth30 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 191 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.3780 | 0.3544 | 0.3517 |
+| synth31 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 201 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.3890 | 0.3007 | 0.3007 |
+| synth32 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 211 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.4372 | 0.4426 | 0.4091 |
+| synth33 | delayed logistic, **3 snapshots**, N jumps ×2–5, fresh seed 221 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.4911 | 0.4911 |
+| synth34 | Gompertz late-rise, **3 snapshots**, N jumps ×2–5, fresh seed 231 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.4357 | 0.4057 |
+| **mean 1–4** | | **0.5980** | **0.3834** | **0.3208** | **0.2705** | **0.2133** | **0.2133** | **0.2133** | **0.2133** | **0.2154** | **0.2154** | **0.2154** | **0.2154** | 0.2154 | 0.2153 | 0.2154 | 0.2154 |
+| **mean 1–7** | | | | | **0.5341** | **0.2534** | **0.2534** | **0.2534** | **0.2534** | **0.2491** | **0.2491** | **0.2491** | **0.2491** | 0.2491 | 0.2491 | 0.2491 | 0.2491 |
+| **mean 1–9** | | | | | **0.7920** | **0.2829** | **0.2706** | **0.2825** | **0.2694** | **0.2584** | **0.2592** | **0.2588** | **0.2585** | 0.2591 | 0.2535 | 0.2546 | 0.2610 | 0.2545 |
+| **mean 1–12** | | | | | | **0.2866** | **0.2774** | **0.2877** | **0.2759** | **0.2674** | **0.2682** | **0.2675** | **0.2682** | 0.2677 | 0.2643 | 0.2647 | 0.2657 | 0.2608 |
+| **mean 1–14** | | | | | | **0.2907** | **0.2982** | **0.2932** | **0.2815** | **0.2713** | **0.2720** | **0.2714** | **0.2719** | 0.2716 | 0.2686 | 0.2690 | 0.2698 | 0.2656 |
+| **mean 1–16** | | | | | | | | | | **0.2982** | **0.2959** | **0.2943** | **0.2938** | 0.2945 | 0.2873 | 0.2879 | 0.2834 | 0.2776 |
+| **mean 1–18** | | | | | | | | | | **0.3147** | **0.3105** | **0.3081** | **0.3068** | 0.3077 | 0.2984 | 0.2989 | 0.2904 | 0.2834 |
+| **mean 1–20** | | | | | | | | | | | | | **0.3156** | **0.3128**  0.3045 | 0.3041 | 0.2904 | 0.2843 |
+| **mean 3-snap (8/10/12/15/16/17/18)** | | | | | | | | | | **0.4211** | **0.4102** | **0.4041** | **0.4008** | 0.4030 | 0.3790 | 0.3803 | 0.3584 | 0.3405 |
+| **mean 3-snap (8/10/12/15/16/17/18/19/20)** | | | | | | | | | | | | | **0.3993** | **0.3932**  0.3748 | 0.3739 | 0.3434 | 0.3297 |
+| **mean 1–22** | | | | | | | | | | | | | 0.3246 | 0.3225 | 0.3135 | 0.3139 | 0.2990 | 0.2921 |
+| **mean 1–24** | | | | | | | | | | | | | | 0.3256 | 0.3176 | 0.3176 | 0.3016 | 0.2953 |
+| **mean 3-snap (11 cases, +21/22)** | | | | | | | | | | | | | 0.4021 | 0.3979 | 0.3799 | 0.3806 | 0.3509 | 0.3371 |
+| **mean 3-snap (13 cases, +21/22/23/24)** | | | | | | | | | | | | | | 0.3920 | 0.3773 | 0.3773 | 0.3478 | 0.3360 |
+| **mean 1–26** | | | | | | | | | | | | | | | 0.3243 | 0.3243 | 0.3075 | 0.3007 |
+| **mean 3-snap (15 cases, +21/22/23/24/25/26)** | | | | | | | | | | | | | | | 0.3809 | 0.3809 | 0.3518 | 0.3401 |
+| **mean 1–28** | | | | | | | | | | | | | | | | 0.3284 | 0.3281 | 0.3103 | 0.3039 |
+| **mean 3-snap (17 cases, +21/22/23/24/25/26/27/28)** | | | | | | | | | | | | | | | | 0.3810 | 0.3806 | 0.3513 | 0.3406 |
+| **mean 1–30** | | | | | | | | | | | | | | | | | 0.3356 | 0.3154 | 0.3092 |
+| **mean 3-snap (19 cases, +21/22/23/24/25/26/27/28/29/30)** | | | | | | | | | | | | | | | | | 0.3868 | 0.3549 | 0.3452 |
+| **mean 1–32** | | | | | | | | | | | | | | | | | 0.3189 | 0.3121 |
+| **mean 1–34** | | | | | | | | | | | | | | | | | | 0.3201 |
+| **mean 3-snap (21 cases, +21/22/23/24/25/26/27/28/29/30/31/32)** | | | | | | | | | | | | | | | | | 0.3565 | 0.3461 |
+| **mean 3-snap (23 cases, +21/22/23/24/25/26/27/28/29/30/31/32/33/34)** | | | | | | | | | | | | | | | | | | 0.3550 |
 
 Synth5–7 (generated for v5, after v4 was chosen, to stress the few-snapshot
 regime: 6–9 distinct snapshots instead of 9–30, refreshes 6–13 h apart,
@@ -859,31 +915,42 @@ the real `main.ts`; variant files in the work dir):
   worse everywhere that matters (mean 1–4 0.2290/0.2327, synth8
   0.66/0.62). The shrinkage, not a hard clip, is the right shape.
 
-Next ideas worth trying for v23 (v22 closed the headroom re-probe —
+Next ideas worth trying for v24 (v23 closed the adaptive-cap idea —
 0.30–0.40 flat, 0.45–0.50 win less; the median family was already
 closed at v21, the SSE family at v14, spread at v13, γ at v19, the
 family-aware rescue at v20, the rolling-origin 1-step drop and the
 floor/N axis at v22 — do not re-sweep any of them):
-1. *Nothing with a diagnostic lead right now.* v22 was the first win
-   bigger than ~0.008 since v18 (mean 1–20 −0.0137, 3-snap9 −0.0305),
-   and it came from re-probing a component (the headroom cap) whose
-   tuning base had changed, not from a new median rule. The remaining
-   cost is concentrated: synth8 (+0.0576 under v22 — its truths close
-   more of the gap than a 0.40 cap allows) and, on the 21-case set,
-   the Gompertz family (0.3784 vs delayed 0.3452). A v23 needs a NEW
-   diagnostic signal aimed at that split — e.g. a per-trophy signal
-   that separates synth8-like cases (fast-closing truth) from the
-   rest before the cap binds — not another point on a closed axis.
-   Candidates already considered and NOT built in the v22 web search:
+1. *Nothing with a diagnostic lead right now.* v23 was the first win
+   bigger than ~0.008 since v18 on the 3-snapshot set (3-snap21
+   −0.0104, 3-snap9 −0.0137), and it came from the case-level
+   fast/slow split the v22 cost pointed at — not from another point
+   on a closed axis. The remaining cost is concentrated: synth33
+   (0.4911, delayed slow — the worst case now, and the rule already
+   keeps v22 there, so no cap change can rescue it) and the Gompertz
+   late-rise family on fast cases (synth26 0.4597, synth22 0.4416,
+   synth34 0.4057). A v24 needs a NEW diagnostic signal aimed at
+   that remainder — e.g. what makes synth33's delayed truth so hard
+   (its truths barely move: mean closure 0.069, yet the fitted
+   medians still overshoot), or a per-trophy signal inside fast
+   cases (synth20 is the only fast case v23 loses). Candidates
+   already considered and NOT built in the v22 web search:
    conformalized quantile regression / jackknife+ spread (Romano et
    al. 2019; Barber et al. 2021) and bagging (Breiman 1996) — both
    are spread/variance ideas, and v10's lesson stands: the
-   3-snapshot gap is a median problem, not a spread problem.
+   3-snapshot gap is a median problem, not a spread problem. NOT
+   tried yet: recalibrating the rarity prior from public PSN /
+   Rockstar data (GTA V, RDR2 trophy earn-rate distributions by
+   tier) — Deep Research on that was still pending when v23 was
+   built; if it lands, test a tier-prior change against the v23
+   gates before adopting anything (the synthetic generator already
+   encodes its own per-tier asymptote ranges, so a PSN prior must
+   WIN on practice + synth mean 1–20 to be kept, not merely look
+   principled).
 2. *More fresh 3-snapshot seeds before any further scope change* —
-   the 3-snapshot verdict now rests on 21 cases (synth31/32 added for
-   v22, seeds 201/211). Two more seeds would firm up any future
+   the 3-snapshot verdict now rests on 23 cases (synth33/34 added
+   for v23, seeds 221/231). Two more seeds would firm up any future
    decision before the deadline (21/11 18:30). Note the diminishing
-   returns: v9 → v22 moved mean 1–18 only 0.3147 → 0.2904, and the
+   returns: v9 → v23 moved mean 1–18 only 0.3147 → 0.2834, and the
    loop should PAUSE here until a new diagnostic signal appears or
    the deadline approaches — re-running the same closed axes will
    only overfit the synthetics.

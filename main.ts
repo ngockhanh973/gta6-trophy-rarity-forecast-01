@@ -1,3 +1,48 @@
+// gta6-trophy-rarity-forecast-01 — v23.
+//
+// v23 changes over v22:
+//  - TREND branch, few snapshots only: ADAPTIVE per-family headroom cap,
+//    chosen per CASE by a fast-closure signal. v22 capped every family's
+//    transformed median at 0.40 before pooling (xform4) AND at 0.40 in the
+//    final step. Diagnostic diag23c.py found the xform4 cap is the whole
+//    story on a case split: loosening ONLY xform4 to 0.60 (variant B,
+//    final cap still 0.40) wins big on FAST-closing cases — synth8
+//    0.4212 -> 0.3630, synth16 -0.0355, synth18 -0.0314, synth22 -0.0289,
+//    synth32 -0.0334, synth26 -0.0231 — and loses on SLOW-closing cases
+//    (+0.011 to +0.033 on synth10/15/17/19/21/23/25/29/31). The split is
+//    almost bimodal in truth closure: fast cases close 0.29-0.39 of the
+//    gap on average, slow cases 0.06-0.15. The signal that separates them
+//    BEFORE the cap binds is the case-mean UNCAPPED pool closure: pool
+//    median rebuilt from the raw family medians (gamma 0.65, no cap, v18
+//    rule), closure (pool-lr)/(100-lr) averaged over the case's trophies.
+//    Fast cases score 0.555-0.679, slow cases 0.069-0.517; 0.53 sits
+//    mid-gap, the middle safest point by the v19/v22 precedent (T=0.53
+//    and 0.55 give identical results, T=0.45/0.50 one case worse, T=0.60
+//    misses fast cases). Above 0.53 the per-family cap is 0.60, below it
+//    v22's 0.40 stands; the final-step cap stays 0.40 either way.
+//    Measured with the real main.ts (variant var-v23-adaptive-cap.ts
+//    in the work dir; exact replay diag23c.py reproduces v22 0.3565):
+//    case-level T=0.53 wins BOTH gates vs v22 — mean 1-20 0.2904 ->
+//    0.2843, 3-snapshot9 0.3434 -> 0.3297; mean 1-32 0.3189 -> 0.3121,
+//    3-snapshot21 0.3565 -> 0.3461, 3-snapshot23 0.3550; fresh pairs
+//    29/30 0.3858 -> 0.3845, 31/32 0.3716 -> 0.3549. Per-trophy
+//    thresholding was also screened and is noise (best 0.3561), so the
+//    switch is case-level, not per-trophy. Fresh seeds 33 (delayed,
+//    seed 221) / 34 (Gompertz, seed 231) were generated BEFORE this
+//    build: their signals are 0.239 (slow, picks v22) and 0.628 (fast,
+//    picks loose) against truth closures 0.069 / 0.358 — the signal
+//    picks the right branch on both unseen seeds, and the pair wins
+//    0.4634 -> 0.4484 (synth33 identical 0.4911, synth34 0.4357 ->
+//    0.4057). Practice unchanged 0.1066. Caveat, stated plainly: the
+//    rule keeps v22 on ALL slow cases (identical losses there), so the
+//    whole win comes from the 10 fast cases; synth20 is the only fast
+//    case that loses (+0.0022). The threshold was placed mid-gap on
+//    the 21-case set, so a future fast case scoring near 0.53 is the
+//    known fragility — the two fresh seeds sit far from it (0.239 /
+//    0.628). Scoped to <=3 snapshots only: xform4 feeds medFew, used
+//    only there; every non-3-snapshot case is bit-identical to v22.
+//    Best is now v23.
+//
 // gta6-trophy-rarity-forecast-01 — v22.
 //
 // v22 changes over v19:
@@ -300,6 +345,11 @@ const GROWTH_DAMPEN = 0.8;
 const HEADROOM_CLOSE = 0.6;
 /** Headroom cap at <= 3 snapshots (v22): 0.40, see header. */
 const HEADROOM_CLOSE_FEW = 0.40;
+/** Headroom cap at <= 3 snapshots on fast-closing cases (v23): 0.60. */
+const HEADROOM_CLOSE_FEW_LOOSE = 0.60;
+/** Case-level fast-closure signal threshold (v23): mean uncapped pool
+    closure above this picks the loose cap. See header. */
+const ADAPTIVE_CAP_THRESHOLD = 0.53;
 /** Tier-asymptote shrinkage (v5): weight on a trophy's own fitted asymptote
     when pulling it toward its tier's median fitted asymptote. */
 const TIER_SHRINK_OWN = 0.75;
@@ -453,7 +503,7 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     return [a, sse];
   };
 
-  const rows = c.trophies.map((t, i) => {
+  const fitted = c.trophies.map((t, i) => {
     const rs = snaps.map((s) => s.rates[i] ?? 0);
     // Candidate fits: [medianAtTarget, sse, predictAt(t), asymptote].
     const cands: Array<[number, number, (tj: number) => number, number]> = [];
@@ -553,6 +603,36 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
       cands.push([a / (1 + Math.exp(-k * (Math.log1p(Math.max(0, targetH - D)) - x0))), sse,
         (tj) => a / (1 + Math.exp(-k * (Math.log1p(Math.max(0, tj - D)) - x0))), a]);
     }
+    return { t, i, cands, rs };
+  });
+  // v23: case-level fast-closure signal — mean over trophies of the
+  // UNCAPPED pool closure (pool median from raw family medians, gamma
+  // 0.65, no headroom cap, v18 low3/mid3 rule). Only at <= 3 snapshots;
+  // at 4+ the pool median is unused, so the cap stays v22's.
+  const poolMedian = (raw: number[], lr: number, fl: number, cap: number): number => {
+    const ms = raw.map((mm) => {
+      let v = mm;
+      if (v > lr) v = lr * Math.pow(v / lr, snaps.length <= 3 ? 0.65 : GROWTH_DAMPEN);
+      v = Math.min(v, lr + cap * (100 - lr));
+      return Math.min(99.99, Math.max(0.01, Math.max(v, fl)));
+    }).sort((a, b) => a - b);
+    const lg = ms.map((m) => logit(m));
+    const ml = lg.reduce((a, v) => a + v, 0) / lg.length;
+    const sd = Math.sqrt(lg.reduce((a, v) => a + (v - ml) ** 2, 0) / lg.length);
+    return sd >= 0.8 ? (ms[1] + ms[2] + ms[3]) / 3 : (ms[0] + ms[1] + ms[2]) / 3;
+  };
+  const headroomFew = snaps.length <= 3 ? (() => {
+    let tot = 0;
+    for (const f of fitted) {
+      const lrF = Math.max(last.rates[f.i] ?? 0, 0.01);
+      const flF = (((last.rates[f.i] ?? 0) / 100) * lastN) / nStar * 100;
+      if (lrF >= 99.99) continue; // closure 0, counted in the mean
+      const pool = poolMedian(f.cands.map((cd) => cd[0]), lrF, flF, 1.0);
+      tot += (pool - lrF) / (100 - lrF);
+    }
+    return (tot / fitted.length) > ADAPTIVE_CAP_THRESHOLD ? HEADROOM_CLOSE_FEW_LOOSE : HEADROOM_CLOSE_FEW;
+  })() : HEADROOM_CLOSE_FEW;
+  const rows = fitted.map(({ t, i, cands, rs }) => {
     // Lowest in-sample SSE wins; ties keep the earliest family (satexp).
     let pick = cands[0];
     for (const cand of cands) if (cand[1] < pick[1]) pick = cand;
@@ -593,7 +673,7 @@ function forecastCase(c: Case): Array<{ id: number; q: number[] }> {
     const xform4 = (mm: number): number => {
       let v = mm;
       if (v > lr) v = lr * Math.pow(v / lr, snaps.length <= 3 ? 0.65 : GROWTH_DAMPEN);
-      v = Math.min(v, lr + (snaps.length <= 3 ? HEADROOM_CLOSE_FEW : HEADROOM_CLOSE) * (100 - lr));
+      v = Math.min(v, lr + (snaps.length <= 3 ? headroomFew : HEADROOM_CLOSE) * (100 - lr));
       return Math.min(99.99, Math.max(0.01, Math.max(v, floorRate)));
     };
     const meds5 = cands.map((cd) => xform4(cd[0])).sort((a, b) => a - b);
