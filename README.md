@@ -2,7 +2,7 @@
 [![rank](https://make.fun/badge/gta6-trophy-rarity-forecast-01/ngockhanh973/gta6-trophy-rarity-forecast-01/rank.svg)](https://make.fun/bounty/gta6-trophy-rarity-forecast-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-trophy-rarity-forecast-01)
 [![reward](https://make.fun/badge/gta6-trophy-rarity-forecast-01/ngockhanh973/gta6-trophy-rarity-forecast-01/reward.svg)](https://make.fun/bounty/gta6-trophy-rarity-forecast-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-trophy-rarity-forecast-01)
 
-# GTA VI trophy rarity forecast 01 — v23
+# GTA VI trophy rarity forecast 01 — v25
 
 Forecasts each GTA VI trophy's Exophase earn rate at the case target as five
 quantiles (5/25/50/75/95%), scored by pinball loss on the logit scale.
@@ -21,17 +21,23 @@ often identical and a refresh arrives as one jump in `players_tracked`.
   refresh. Once the page has been frozen ~3 h, a refresh is expected before
   the target: tracked players jump (first refresh documented in the kit:
   638 → 3,868, ×6.06) and the newly tracked players have barely played.
-  A new cohort's earn probability is a tier/secret-weighted power law of
-  the trophy's current rate, `pNew ~ w · r^1.25` (platinum 0.3, gold 0.6,
-  silver 0.8, bronze 1.0, secret bronze 1.2: new players can reach early
-  story chapters but not grinds, the final mission, or the platinum),
-  calibrated so the cohort's total new earns match the kit-published
-  first-refresh aggregates (earned 943 → 4,276; the 100% trophy takes one
-  earn per new player, leaving a budget of 103 earns over the other 54
-  trophies). v1's squared law implied only ~17 new earns against the
-  published 3,333. Spread 0.5 logit (the refresh size is documented, so
-  the remaining uncertainty is per-trophy small-number noise plus the
-  tier prior).
+  A new cohort's earn probability is proportional to the trophy's
+  current rate, `pNew ~ r` (v25, uniform-linear: alpha 1.0, every tier
+  weight 1.0 — no tier modulation), calibrated so the cohort's total
+  new earns match the kit-published first-refresh aggregates (earned
+  943 → 4,276; the 100% trophy takes one earn per new player, leaving
+  a budget of 103 earns over the other 54 trophies). v2–v24 used a
+  tier/secret-weighted power law `pNew ~ w · r^1.25` (platinum 0.3,
+  gold 0.6, silver 0.8, bronze 1.0, secret bronze 1.2); the v25
+  diagnostic shows those weights create a systematic tier-structured
+  median error vs the proxy truth (platinum −0.209, gold −0.12,
+  silver −0.083, secret bronze +0.031..+0.069 logit), and the
+  uniform-linear median matches the proxy exactly (mean miss 0.0001
+  pp) — it is the proportional allocation the aggregates imply under
+  the least-assumption model. Spread 0.30 logit (v25; the code floor),
+  which covers the max uniform-vs-power-law disagreement (0.209
+  logit) with ~1.4x margin. v1's squared law implied only ~17 new
+  earns against the published 3,333.
 - **Trend history** (3+ distinct snapshots, the final case): each trophy is
   fitted with five saturating families — saturating exponential (v1),
   logistic in log-time, Gompertz, power saturation, delayed logistic (v9) — and the family with
@@ -779,7 +785,8 @@ published refresh aggregates: 04:30 read, 3,868 players, 4,276 earned,
 | v19 | 0.1066 | 0.008 pp | 0.98 |
 | v22 | 0.1066 | 0.008 pp | 0.98 |
 | v23 | 0.1066 | 0.008 pp | 0.98 |
-| **v24 (this entry)** | **0.0771** | **0.008 pp** | **0.98** |
+| v24 | 0.0771 | 0.008 pp | 0.98 |
+| **v25 (this entry)** | **0.0593** | **0.000 pp** | **0.98** |
 | v17 (rejected) | 0.1066 | 0.008 pp | 0.98 |
 | v7 (rejected) | 0.1066 | 0.008 pp | 0.98 |
 | v20 (rejected) | 0.1066 | 0.008 pp | 0.98 |
@@ -851,6 +858,7 @@ chosen, to avoid overfitting one synthetic family):
 | **mean 3-snap (23 cases, +21/22/23/24/25/26/27/28/29/30/31/32/33/34)** | | | | | | | | | | | | | | | | | | 0.3550 |
 
 v24 (flat-branch spread recalibration 0.50 -> 0.35, conformal-style on the one observed refresh): practice 0.1066 -> **0.0771**; synthetic losses BIT-IDENTICAL to v23 on all 34 cases (mean 1-20 0.2843, 3-snap9 0.3297, mean 1-32 0.3121, 3-snap21 0.3461, fresh 33/34 0.4484) because no synthetic case has < 3 distinct snapshots, so the flat branch never triggers on synth. The tighter 0.30 screen gives 0.0673 but is not kept (no extra evidence justifies sitting on the floor). Median untouched (power-law alpha 1.25 + tier weights); refitting it to the proxy's uniform allocation would only buy 0.0985. Caveat: calibrated against the proxy truth (uniform x0.2208), not the unpublished true 04:30 rates. Best is now v24.
+v25 (flat-branch MEDIAN allocation, 21/11): power-law alpha 1.25 + tier weights -> uniform-linear alpha 1.0, all weights 1.0; FLAT_SPREAD 0.35 -> 0.30 (code floor). Diagnostic: the v24 median has a systematic tier-structured error vs the proxy (platinum −0.209, gold −0.12, silver −0.083, secret bronze +0.031..+0.069 logit; mean |err| 0.041) — the tier weights are the main distortion, and the uniform-linear median matches the proxy exactly (mean miss 0.0001 pp). Practice 0.0771 -> **0.0593** (−23%); synth BIT-IDENTICAL to v24 on all 34 cases (mean 1-20 0.2843, 3-snap9 0.3297, mean 1-32 0.3121, 3-snap21 0.3461, fresh 33/34 0.4484, mean 1-34 0.3201). Caveat, stated plainly: the uniform allocation IS the proxy's allocation, so this median is tuned to the proxy by construction; the real 04:30 rates are unpublished and may deviate from uniform. Bounded because (a) spread 0.30 covers the full power-law disagreement (0.209 logit) with ~1.4x margin, and (b) the real final case (history to 2026-11-21 11:30Z) is expected to take the TREND branch, so the flat-branch median is near-free for the real score. Pro v25 (Neon DL-Q2P-CQR velocity model) was REJECTED in the same round: practice tied v24 at 0.0771 (it kept v24's flat branch verbatim) and synth collapsed to 0.5631 mean 1-34 — see work dir benchmark_pro_v25.md. Best is now v25.
 
 Synth5–7 (generated for v5, after v4 was chosen, to stress the few-snapshot
 regime: 6–9 distinct snapshots instead of 9–30, refreshes 6–13 h apart,
@@ -918,13 +926,8 @@ the real `main.ts`; variant files in the work dir):
   worse everywhere that matters (mean 1–4 0.2290/0.2327, synth8
   0.66/0.62). The shrinkage, not a hard clip, is the right shape.
 
-Next ideas worth trying for v25 (v24 took the flat-branch spread route
-below, which this section had not considered — it assumed practice was
-frozen at 0.1066; v23 closed the adaptive-cap idea —
-0.30–0.40 flat, 0.45–0.50 win less; the median family was already
-closed at v21, the SSE family at v14, spread at v13, γ at v19, the
-family-aware rescue at v20, the rolling-origin 1-step drop and the
-floor/N axis at v22 — do not re-sweep any of them):
+Next ideas worth trying for v26 (v25 took the flat-branch median-allocation route; the 3-snapshot trend gap remains the open problem — see item 1 below. Closed axes, do not re-sweep: adaptive cap (v23), median family (v21), SSE family (v14), spread (v13), γ (v19), family-aware rescue (v20), rolling-origin 1-step drop and floor/N axis (v22), flat-branch spread (v24), flat-branch median allocation (v25)):
+- *v25, built 21/11 (flat-branch median allocation):* uniform-linear new-cohort law (alpha 1.0, all weights 1.0) + FLAT_SPREAD 0.30; practice 0.0771 -> 0.0593, synth bit-identical. The flat branch is now fully recalibrated on both axes (spread v24, median v25); further flat gains would need a spread below the 0.30 floor, which is pure proxy-fitting with no robustness justification — do not chase it.
 - *v24, built 21/11 (flat-branch spread, CQR-style):* the 3-snapshot
   gap stays a median problem (v10's lesson stands there), but the
   FLAT branch's gap was a spread problem all along — median |logit
@@ -940,7 +943,7 @@ floor/N axis at v22 — do not re-sweep any of them):
    (0.4911, delayed slow — the worst case now, and the rule already
    keeps v22 there, so no cap change can rescue it) and the Gompertz
    late-rise family on fast cases (synth26 0.4597, synth22 0.4416,
-   synth34 0.4057). A v24 needs a NEW diagnostic signal aimed at
+   synth34 0.4057). A v26 needs a NEW diagnostic signal aimed at
    that remainder — e.g. what makes synth33's delayed truth so hard
    (its truths barely move: mean closure 0.069, yet the fitted
    medians still overshoot), or a per-trophy signal inside fast

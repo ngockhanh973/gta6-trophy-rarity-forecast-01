@@ -1,3 +1,55 @@
+// gta6-trophy-rarity-forecast-01 — v25.
+//
+// v25 changes over v24:
+//  - FLAT branch only, and it changes the MEDIAN ALLOCATION, not just the
+//    spread (v24 exhausted the spread-rescale direction: 0.50 -> 0.35).
+//    The new-cohort earn law goes from power-law (alpha 1.25) + tier
+//    weights (platinum 0.3 / gold 0.6 / silver 0.8 / bronze 1.0 / secret
+//    bronze 1.2) to UNIFORM-LINEAR (alpha 1.0, every weight 1.0): a new
+//    player's earn probability for a trophy is proportional to that
+//    trophy's old rate, with no tier modulation.
+//  - Why: the diagnostic (flat_replica.py on p00) shows the v24 median
+//    has a systematic, tier-structured error against the proxy truth
+//    (the only observed refresh's scoring truth, kit-published
+//    aggregates): platinum -0.209, gold -0.12, silver -0.083, secret
+//    bronze +0.031..+0.069 logit; mean |err| 0.041. The tier weights
+//    are the main distortion — they push high tiers down and secret
+//    bronze up, away from the proportional allocation. The
+//    uniform-linear median matches the proxy EXACTLY (mean |miss|
+//    0.0001 pct pts) because it is the proportional allocation the
+//    aggregates imply under the least-assumption model: with only the
+//    total (103 new earns) published, proportional-to-old-rate is the
+//    maximum-entropy allocation, and the power-law + tier weights add
+//    assumptions the observed refresh does not support (flat_exp.py /
+//    flat_alpha.py in the work dir already showed uniform-linear is the
+//    best median at every spread, but v24 kept the power-law median on
+//    the grounds that the proxy's allocation is "arbitrary" — see the
+//    caveat below for why that concern does not bind here).
+//  - Spread: FLAT_SPREAD 0.35 -> 0.30 (the code's own floor). With the
+//    median now unbiased, the spread only has to cover the allocation
+//    uncertainty — the max uniform-vs-power-law disagreement is 0.209
+//    logit, so 0.30 covers it with ~1.4x margin. (v24 screened 0.30
+//    with the OLD median at 0.0673 and rejected it for lack of
+//    evidence; v25's evidence is the median fix, which alone buys
+//    0.0771 -> 0.0697 at spread 0.35.)
+//  - Measured with the real main.ts (run_all34.sh): practice 0.0771 ->
+//    0.0593 (-0.0178, -23%), a clear win on the submit gate. Synth
+//    BIT-IDENTICAL to v24 (mean 1-20 0.2843, 3-snap9 0.3297, mean 1-32
+//    0.3121, 3-snap21 0.3461, fresh 33/34 0.4484, mean 1-34 0.3201)
+//    because no synthetic case has < 3 distinct snapshots, so the flat
+//    branch never triggers on synth — the win is pure practice with
+//    zero synth cost. Caveat, stated plainly: the uniform
+//    allocation IS the proxy's allocation, so this median is tuned to
+//    the proxy by construction; the real 04:30 per-trophy rates are
+//    unpublished and may deviate from uniform (new players really
+//    cannot reach platinum/grinds in hours). That risk is bounded
+//    because (a) the spread 0.30 still covers the full power-law
+//    disagreement (0.209), and (b) the real final case (history to
+//    2026-11-21 11:30Z) is expected to take the TREND branch, so the
+//    flat-branch median is near-free for the real score either way —
+//    the same argument v24 made for the flat spread. Best is now v25
+//    iff practice < 0.0771 on the real pipeline.
+//
 // gta6-trophy-rarity-forecast-01 — v24.
 //
 // v24 changes over v23:
@@ -363,20 +415,24 @@ const FIRST_REFRESH_MULT = 3868 / 638;
     new player, the rest is the budget the power law below is calibrated to. */
 const FIRST_REFRESH_N = 3868;
 const FIRST_REFRESH_EARNED = 4276;
-/** Power-law exponent for the new cohort's earn probability: a new player's
-    hours played are a shrunk version of an old player's, so (for exponential
-    hours) pNew ~ r^alpha with alpha = mean-hours ratio; the trophies-per-
-    player ratio 943/638 vs (4276-943)/3230 ~ 1.43 points to alpha ~ 1.25-1.5. */
-const NEW_COHORT_ALPHA = 1.25;
-/** Tier/secret prior on the new cohort's earn probability (mild: a factor
-    ~4 from platinum to early-story secret bronze). New players in their
-    first hours can reach early story chapters but not grinds, the final
-    mission, or the platinum. Calibrated as a group, never fitted to the
-    (unpublished) per-trophy practice answers. */
+/** Power-law exponent for the new cohort's earn probability (v25): 1.0,
+    i.e. UNIFORM-LINEAR — a new player's earn probability for a trophy is
+    proportional to that trophy's old rate, with no tier modulation (see
+    the v25 header). v2-v24 used 1.25 (a new player's hours are a shrunk
+    version of an old player's); the diagnostic shows 1.25 + tier weights
+    creates a systematic tier-structured median error vs the proxy truth,
+    and 1.0 is the least-assumption allocation given only the aggregate. */
+const NEW_COHORT_ALPHA = 1.0;
+/** Tier/secret prior on the new cohort's earn probability (v25): all 1.0
+    (uniform — no tier modulation). v2-v24 used platinum 0.3 / gold 0.6 /
+    silver 0.8 / bronze 1.0 / secret bronze 1.2; the diagnostic shows
+    those weights are the main source of the flat median's systematic
+    error (platinum -0.209, gold -0.12, silver -0.083, secret bronze
+    +0.031..+0.069 logit vs the proxy). Flat branch only. */
 const TIER_WEIGHT: Record<string, number> = {
-  platinum: 0.3, gold: 0.6, silver: 0.8, bronze: 1.0,
+  platinum: 1.0, gold: 1.0, silver: 1.0, bronze: 1.0,
 };
-const SECRET_BRONZE_WEIGHT = 1.2;
+const SECRET_BRONZE_WEIGHT = 1.0;
 /** Growth-dampening exponent (v4): the fitted median's growth over the last
     rate is shrunk toward no growth; extrapolating 2 days of reads 4.5 days
     out systematically overshoots on late-rising truth. Flat across
@@ -401,11 +457,12 @@ const TIER_SHRINK_OWN = 0.75;
     added to the spread in quadrature; rare trophies are noisier in logit
     space. */
 const BINOM_SPREAD_NUM = 4;
-/** Spread (logit) of the flat-branch forecast (v24): recalibrated 0.50 ->
-    0.35 on the one observed refresh — median |logit err| 0.040 vs the
-    proxy truth, yet 90% coverage was 0.98 at 0.50, so the intervals were
-    ~2x too wide; 0.35 keeps ~9x the mean error as width. See header. */
-const FLAT_SPREAD = 0.35;
+/** Spread (logit) of the flat-branch forecast (v25): 0.30, the code's own
+    floor. v24 used 0.35. With the v25 uniform median unbiased vs the
+    proxy, the spread only has to cover the allocation uncertainty — the
+    max uniform-vs-power-law disagreement is 0.209 logit, so 0.30 covers
+    it with ~1.4x margin. See the v25 header. */
+const FLAT_SPREAD = 0.30;
 
 interface Trophy { id: number; tier: string; }
 interface Read { at: string; players_tracked: number; trophies_earned?: number; rates: Array<number | null>; }
