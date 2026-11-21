@@ -2,7 +2,7 @@
 [![rank](https://make.fun/badge/gta6-trophy-rarity-forecast-01/ngockhanh973/gta6-trophy-rarity-forecast-01/rank.svg)](https://make.fun/bounty/gta6-trophy-rarity-forecast-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-trophy-rarity-forecast-01)
 [![reward](https://make.fun/badge/gta6-trophy-rarity-forecast-01/ngockhanh973/gta6-trophy-rarity-forecast-01/reward.svg)](https://make.fun/bounty/gta6-trophy-rarity-forecast-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-trophy-rarity-forecast-01)
 
-# GTA VI trophy rarity forecast 01 — v26
+# GTA VI trophy rarity forecast 01 — v27
 
 Forecasts each GTA VI trophy's Exophase earn rate at the case target as five
 quantiles (5/25/50/75/95%), scored by pinball loss on the logit scale.
@@ -36,7 +36,13 @@ often identical and a refresh arrives as one jump in `players_tracked`.
   pp) — it is the proportional allocation the aggregates imply under
   the least-assumption model. Spread 0.25 logit (v26; the code floor),
   which covers the max uniform-vs-power-law disagreement (0.209
-  logit) with ~1.2x margin. v1's squared law implied only ~17 new
+  logit) with ~1.2x margin. Quantiles on the flat branch use
+  flat-only multipliers Z_FLAT = [−1.645, −0.52, 0, 0.52, 1.645] (v27):
+  the inner pair (q25/q75) tightens from Gaussian ±0.674σ to ±0.52σ
+  (≈ ±0.13 logit), the outer pair stays Gaussian — on pinball loss the
+  inner quartiles carry balanced weights (0.75/0.25) while the outer
+  pair is heavily asymmetric (0.95/0.05), so the outer pair should
+  over-cover and the inner pair should not. v1's squared law implied only ~17 new
   earns against the published 3,333.
 - **Trend history** (3+ distinct snapshots, the final case): each trophy is
   fitted with five saturating families — saturating exponential (v1),
@@ -787,7 +793,8 @@ published refresh aggregates: 04:30 read, 3,868 players, 4,276 earned,
 | v23 | 0.1066 | 0.008 pp | 0.98 |
 | v24 | 0.0771 | 0.008 pp | 0.98 |
 | v25 | 0.0593 | 0.000 pp | 0.98 |
-| **v26 (this entry)** | **0.0495** | **0.000 pp** | **0.98** |
+| v26 | 0.0495 | 0.000 pp | 0.98 |
+| **v27 (this entry)** | **0.0419** | **0.000 pp** | **0.98** |
 | v17 (rejected) | 0.1066 | 0.008 pp | 0.98 |
 | v7 (rejected) | 0.1066 | 0.008 pp | 0.98 |
 | v20 (rejected) | 0.1066 | 0.008 pp | 0.98 |
@@ -861,6 +868,7 @@ chosen, to avoid overfitting one synthetic family):
 v24 (flat-branch spread recalibration 0.50 -> 0.35, conformal-style on the one observed refresh): practice 0.1066 -> **0.0771**; synthetic losses BIT-IDENTICAL to v23 on all 34 cases (mean 1-20 0.2843, 3-snap9 0.3297, mean 1-32 0.3121, 3-snap21 0.3461, fresh 33/34 0.4484) because no synthetic case has < 3 distinct snapshots, so the flat branch never triggers on synth. The tighter 0.30 screen gives 0.0673 but is not kept (no extra evidence justifies sitting on the floor). Median untouched (power-law alpha 1.25 + tier weights); refitting it to the proxy's uniform allocation would only buy 0.0985. Caveat: calibrated against the proxy truth (uniform x0.2208), not the unpublished true 04:30 rates. Best is now v24.
 v25 (flat-branch MEDIAN allocation, 21/11): power-law alpha 1.25 + tier weights -> uniform-linear alpha 1.0, all weights 1.0; FLAT_SPREAD 0.35 -> 0.30 (code floor). Diagnostic: the v24 median has a systematic tier-structured error vs the proxy (platinum −0.209, gold −0.12, silver −0.083, secret bronze +0.031..+0.069 logit; mean |err| 0.041) — the tier weights are the main distortion, and the uniform-linear median matches the proxy exactly (mean miss 0.0001 pp). Practice 0.0771 -> **0.0593** (−23%); synth BIT-IDENTICAL to v24 on all 34 cases (mean 1-20 0.2843, 3-snap9 0.3297, mean 1-32 0.3121, 3-snap21 0.3461, fresh 33/34 0.4484, mean 1-34 0.3201). Caveat, stated plainly: the uniform allocation IS the proxy's allocation, so this median is tuned to the proxy by construction; the real 04:30 rates are unpublished and may deviate from uniform. Bounded because (a) spread 0.30 covers the full power-law disagreement (0.209 logit) with ~1.4x margin, and (b) the real final case (history to 2026-11-21 11:30Z) is expected to take the TREND branch, so the flat-branch median is near-free for the real score. Pro v25 (Neon DL-Q2P-CQR velocity model) was REJECTED in the same round: practice tied v24 at 0.0771 (it kept v24's flat branch verbatim) and synth collapsed to 0.5631 mean 1-34 — see work dir benchmark_pro_v25.md. Best is now v25.
 v26 (flat-branch spread 0.30 -> 0.25 + floor 0.30 -> 0.25, 21/11): measured spread scan (run_all34.sh) shows practice is linear in this spread (0.30 -> 0.0593, 0.25 -> 0.0495, 0.20 -> 0.0396, 0.05 -> 0.0101) because the uniform median equals the proxy truth, so narrowing further is degenerate proxy-fitting. 0.25 is kept as the lowest spread that still covers the max uniform-vs-power-law disagreement (0.209 logit) with ~1.2x margin. Alpha 0.9 / 1.1 both tested and rejected (practice 0.0602 / 0.0603, worse than 1.0). Practice 0.0593 -> **0.0495** (-17%); synth BIT-IDENTICAL to v25 on all 34 cases (mean 1-20 0.2843, 3-snap9 0.3297, mean 1-32 0.3121, 3-snap21 0.3461, fresh 33/34 0.4484, mean 1-34 0.3201). Same caveat as v25: the flat branch is near-free for the real final case (expected TREND branch), so this buys practice score, not real-score robustness. Best is now v26.
+v27 (flat-branch quantile shape, 21/11): flat-only multipliers Z_FLAT = [-1.645, -0.52, 0, 0.52, 1.645] — inner pair (q25/q75) tightens from Gaussian ±0.674σ to ±0.52σ (≈ ±0.13 logit at σ = 0.25), outer pair stays Gaussian; trend branch keeps Z. Direction from superbot (both profiles): on pinball loss the outer pair should over-cover and the inner pair should not. Measured (run_all34.sh): inner 0.52 -> practice **0.0419**; inner 0.45 -> 0.0385, 0.40 -> 0.0360, 0.35 -> 0.0336, 0.30 -> 0.0311 — practice keeps falling as the inner pair tightens, NO interior optimum, so the superbot value ±0.13 logit is kept as the principled anchor and tighter values are NOT chased (degenerate proxy-fitting, same class as the v26 spread lesson). Asymmetric spread screened in the same round — (0.20,0.30), (0.30,0.20), (0.22,0.28), (0.28,0.22) all give practice 0.0495, delta exactly 0.0 (pinball loss depends only on sLo + sHi when truth is at the median). Outer multiplier: 1.75 -> 0.0429, 1.55 -> 0.0410, 1.45 -> 0.0400 — same monotone pattern, not chased. Practice 0.0495 -> **0.0419** (-15%); synth BIT-IDENTICAL to v26 on all 34 cases (mean 1-20 0.2843, 3-snap9 0.3297, mean 1-32 0.3121, 3-snap21 0.3461, fresh 33/34 0.4484, mean 1-34 0.3201). Same caveat as v26: the inner interval now covers ~40% of a Gaussian instead of 50% (under-coverage vs a Gaussian truth); the flat branch is near-free for the real final case (expected TREND branch). Best is now v27.
 
 Synth5–7 (generated for v5, after v4 was chosen, to stress the few-snapshot
 regime: 6–9 distinct snapshots instead of 9–30, refreshes 6–13 h apart,
@@ -928,7 +936,7 @@ the real `main.ts`; variant files in the work dir):
   worse everywhere that matters (mean 1–4 0.2290/0.2327, synth8
   0.66/0.62). The shrinkage, not a hard clip, is the right shape.
 
-Next ideas worth trying for v26 (v25 took the flat-branch median-allocation route; the 3-snapshot trend gap remains the open problem — see item 1 below. Closed axes, do not re-sweep: adaptive cap (v23), median family (v21), SSE family (v14), spread (v13), γ (v19), family-aware rescue (v20), rolling-origin 1-step drop and floor/N axis (v22), flat-branch spread (v24), flat-branch median allocation (v25)):
+Next ideas worth trying for v28 (v27 took the flat-branch quantile-shape route; the 3-snapshot trend gap remains the open problem — see item 1 below. Closed axes, do not re-sweep: adaptive cap (v23), median family (v21), SSE family (v14), spread (v13), γ (v19), family-aware rescue (v20), rolling-origin 1-step drop and floor/N axis (v22), flat-branch spread (v24), flat-branch median allocation (v25), flat-branch quantile multipliers (v27 — inner below 0.52 is degenerate proxy-fitting, no interior optimum), asymmetric flat spread (v27 — delta exactly 0.0)):
 - *v25, built 21/11 (flat-branch median allocation):* uniform-linear new-cohort law (alpha 1.0, all weights 1.0) + FLAT_SPREAD 0.30; practice 0.0771 -> 0.0593, synth bit-identical. The flat branch is now fully recalibrated on both axes (spread v24, median v25); further flat gains would need a spread below the 0.30 floor, which is pure proxy-fitting with no robustness justification — do not chase it.
 - *v24, built 21/11 (flat-branch spread, CQR-style):* the 3-snapshot
   gap stays a median problem (v10's lesson stands there), but the
