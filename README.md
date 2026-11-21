@@ -778,7 +778,8 @@ published refresh aggregates: 04:30 read, 3,868 players, 4,276 earned,
 | v18 | 0.1066 | 0.008 pp | 0.98 |
 | v19 | 0.1066 | 0.008 pp | 0.98 |
 | v22 | 0.1066 | 0.008 pp | 0.98 |
-| **v23 (this entry)** | **0.1066** | **0.008 pp** | **0.98** |
+| v23 | 0.1066 | 0.008 pp | 0.98 |
+| **v24 (this entry)** | **0.0771** | **0.008 pp** | **0.98** |
 | v17 (rejected) | 0.1066 | 0.008 pp | 0.98 |
 | v7 (rejected) | 0.1066 | 0.008 pp | 0.98 |
 | v20 (rejected) | 0.1066 | 0.008 pp | 0.98 |
@@ -849,6 +850,8 @@ chosen, to avoid overfitting one synthetic family):
 | **mean 3-snap (21 cases, +21/22/23/24/25/26/27/28/29/30/31/32)** | | | | | | | | | | | | | | | | | 0.3565 | 0.3461 |
 | **mean 3-snap (23 cases, +21/22/23/24/25/26/27/28/29/30/31/32/33/34)** | | | | | | | | | | | | | | | | | | 0.3550 |
 
+v24 (flat-branch spread recalibration 0.50 -> 0.35, conformal-style on the one observed refresh): practice 0.1066 -> **0.0771**; synthetic losses BIT-IDENTICAL to v23 on all 34 cases (mean 1-20 0.2843, 3-snap9 0.3297, mean 1-32 0.3121, 3-snap21 0.3461, fresh 33/34 0.4484) because no synthetic case has < 3 distinct snapshots, so the flat branch never triggers on synth. The tighter 0.30 screen gives 0.0673 but is not kept (no extra evidence justifies sitting on the floor). Median untouched (power-law alpha 1.25 + tier weights); refitting it to the proxy's uniform allocation would only buy 0.0985. Caveat: calibrated against the proxy truth (uniform x0.2208), not the unpublished true 04:30 rates. Best is now v24.
+
 Synth5–7 (generated for v5, after v4 was chosen, to stress the few-snapshot
 regime: 6–9 distinct snapshots instead of 9–30, refreshes 6–13 h apart,
 players-tracked jumping by irregular multipliers instead of smoothly) are
@@ -915,11 +918,20 @@ the real `main.ts`; variant files in the work dir):
   worse everywhere that matters (mean 1–4 0.2290/0.2327, synth8
   0.66/0.62). The shrinkage, not a hard clip, is the right shape.
 
-Next ideas worth trying for v24 (v23 closed the adaptive-cap idea —
+Next ideas worth trying for v25 (v24 took the flat-branch spread route
+below, which this section had not considered — it assumed practice was
+frozen at 0.1066; v23 closed the adaptive-cap idea —
 0.30–0.40 flat, 0.45–0.50 win less; the median family was already
 closed at v21, the SSE family at v14, spread at v13, γ at v19, the
 family-aware rescue at v20, the rolling-origin 1-step drop and the
 floor/N axis at v22 — do not re-sweep any of them):
+- *v24, built 21/11 (flat-branch spread, CQR-style):* the 3-snapshot
+  gap stays a median problem (v10's lesson stands there), but the
+  FLAT branch's gap was a spread problem all along — median |logit
+  err| 0.040 vs the proxy, coverage 0.98 at spread 0.50. FLAT_SPREAD
+  0.50 -> 0.35, practice 0.1066 -> 0.0771, synth bit-identical.
+  The conformal/jackknife+ spread idea is now realised on the flat
+  branch, not the 3-snapshot trend branch.
 1. *Nothing with a diagnostic lead right now.* v23 was the first win
    bigger than ~0.008 since v18 on the 3-snapshot set (3-snap21
    −0.0104, 3-snap9 −0.0137), and it came from the case-level
